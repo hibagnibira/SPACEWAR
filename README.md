@@ -20,8 +20,11 @@ The detailed narrative, characters, and universe will be expanded as development
 SPACEWAR is designed around classic arcade shooter mechanics, combining fast-paced combat, movement, and survival.
 
 Core Gameplay Loop
+
 Move — Navigate through space and dodge incoming threats.
+
 Shoot — Fire projectiles to eliminate enemy spaceships.
+
 Survive — Avoid enemy attacks and environmental hazards while managing your health.
 Defeat the Boss — Face powerful bosses with unique attack patterns.
 Planned Features
