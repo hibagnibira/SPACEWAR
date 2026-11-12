@@ -52,7 +52,7 @@ Player::Player(Vector2 startPosition, float worldWidth, float worldHeight)
 // Autonomous execution of Option A movement, world boundary clamping,
 // and smooth camera target following without exposing private state.
 // ----------------------------------------------------------------------------
-void Player::Update(float dt, Camera2D& camera)
+void Player::Update(float dt, const Camera2D& camera)
 {
     if (dt <= 0.0f)
     {
@@ -135,15 +135,7 @@ void Player::Update(float dt, Camera2D& camera)
         m_velocity.y = 0.0f;
     }
 
-    // ------------------------------------------------------------------------
-    // 5. Smooth Camera Follow (Internal Encapsulation)
-    // The player directly updates camera.target toward its private m_position.
-    // ------------------------------------------------------------------------
-    constexpr float CAMERA_FOLLOW_SPEED = 5.0f; // Interpolation responsiveness
-    const float cameraBlend = 1.0f - std::exp(-CAMERA_FOLLOW_SPEED * dt);
-
-    camera.target.x += (m_position.x - camera.target.x) * cameraBlend;
-    camera.target.y += (m_position.y - camera.target.y) * cameraBlend;
+   
 }
 // ----------------------------------------------------------------------------
 // Draw

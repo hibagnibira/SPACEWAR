@@ -32,6 +32,9 @@ constexpr float SLOWING_RADIUS = 180.0f; // Radius at which the ship begins dece
 
 class Player
 {
+    // Grant Game direct access to private attributes for camera tracking
+    // This allows Game to center the camera without exposing any getters or setters.
+    friend class Game;
 
 private:
     // Transform & Physics State
@@ -72,9 +75,8 @@ public:
     //  5. Maximum speed clamp.
     //  6. Position integration and boundary enforcement.
     // ------------------------------------------------------------------------
-    // Autonomous behavioral update: converts mouse coordinates to world space,
-    // applies Option A movement, enforces boundaries, and smoothly guides the camera.
-    void Update(float dt, Camera2D& camera);
+    // Player reads the camera only to convert mouse screen coordinates to world coordinates
+    void Update(float dt, const Camera2D& camera);
 
     // ------------------------------------------------------------------------
     // Draw

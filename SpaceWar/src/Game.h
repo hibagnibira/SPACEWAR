@@ -50,34 +50,36 @@ enum class GameState
     Victory
 };
 
+#pragma once
+
+#include "raylib.h"
+#include "Player.h"
+
 class Game
 {
-private:
-    int screenWidth;
-    int screenHeight;
-    GameState currentState;
 
-    Player player;
-    std::vector<Bullet> bullets;
-    std::vector<Enemy> enemies;
-    std::vector<Asteroid> asteroids;
-    Boss boss;
-    AssetManager assetManager;
+private:
+    int   m_screenWidth;
+    int   m_screenHeight;
+    float m_worldWidth;
+    float m_worldHeight;
+
+    Player   m_player; // Game owns the Player instance
+    Camera2D m_camera; // Game owns and manages the Camera2D instance
+
+    // Internal helper to smoothly move camera.target toward m_player.m_position
+    void UpdateCamera(float dt);
 
 public:
-    // Constructor and Destructor
-    Game();
-    ~Game();
+    Game(int screenWidth = 1280, int screenHeight = 720);
+    ~Game() = default;
 
-    // Core game loop methods
+    // Initializes the player, world dimensions, and camera parameters
     void Init();
-    void Run();
-    void Update(float deltaTime);
-    void Draw() const;
 
-    // Coordination and state management methods
-    void HandleInput();
-    void CheckCollisions();
-    void SpawnEnemies();
-    void ChangeGameState(GameState newState);
+    // Runs per-frame logic: updates player and smoothly interpolates the camera
+    void Update(float dt);
+
+    // Coordinates rendering: world inside BeginMode2D, HUD/UI outside
+    void Draw();
 };
