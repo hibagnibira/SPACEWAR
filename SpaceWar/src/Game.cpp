@@ -8,6 +8,13 @@
 #include <cmath>
 #include <algorithm>
 
+// ----------------------------------------------------------------------------
+// TEMPORARY DEBUG DAMAGE — remove once enemy/asteroid/boss damage exists.
+// Press F1 once to deal DEBUG_DAMAGE_AMOUNT percent damage to the player.
+// ----------------------------------------------------------------------------
+constexpr int   DEBUG_DAMAGE_KEY = KEY_F1;
+constexpr float DEBUG_DAMAGE_AMOUNT = 10.0f;
+
 Game::Game(int screenWidth, int screenHeight)
     : m_screenWidth(screenWidth)
     , m_screenHeight(screenHeight)
@@ -69,6 +76,12 @@ void Game::Update(float dt)
 
     // 3. Update projectiles
     UpdateBullets(dt);
+
+    // Temporary debug damage (single press per hit, not per frame)
+    if (IsKeyPressed(DEBUG_DAMAGE_KEY))
+    {
+        m_player.TakeDamage(DEBUG_DAMAGE_AMOUNT);
+    }
 
     // 4. Smoothly follow player's new position
     UpdateCamera(dt);
@@ -175,6 +188,16 @@ void Game::Draw()
     // --------------------------------------------------------------------
     DrawText("SPACEWAR", 20, 20, 20, RAYWHITE);
     DrawFPS(m_screenWidth - 100, 20);
+
+    // HUD: player health bar (fixed screen position, drawn by Player)
+    m_player.DrawHealthBar();
+
+    // HUD: controls guide (update this list when bindings change)
+    DrawText("CONTROLS", 20, 260, 18, RAYWHITE);
+    DrawText("Mouse      - Move & aim",        20, 286, 14, GRAY);
+    DrawText("Left Click - Toggle shooting",   20, 304, 14, GRAY);
+    DrawText("Space      - Dash / Boost",      20, 322, 14, GRAY);
+    DrawText("F1         - Debug damage (temporary)", 20, 340, 14, GRAY);
 
     EndDrawing();
 }

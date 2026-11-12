@@ -45,6 +45,12 @@ constexpr float DASH_COOLDOWN_DURATION = 3.0f;
 // ~4 shots per second — medium frequency, tune after testing.
 constexpr float FIRE_INTERVAL = 0.25f;
 
+// ----------------------------------------------------------------------------
+// Health Configuration
+// ----------------------------------------------------------------------------
+constexpr float PLAYER_MAX_HEALTH = 100.0f;      // Health is a percentage: 0-100
+constexpr float PLAYER_STARTING_HEALTH = 100.0f; // Ships spawn at full health
+
 class Player
 {
     // Grant Game direct access to private attributes for camera tracking
@@ -81,6 +87,10 @@ private:
     float m_fireTimer;        // Countdown to the next automatic shot
     bool  m_shotRequested;    // One-frame flag: Game spawns a bullet when set
 
+    // Health & Death State
+    float m_health;   // Current health, clamped between 0 and PLAYER_MAX_HEALTH
+    bool  m_isDead;   // True once health reaches zero
+
     // Ends the active dash and starts the cooldown timer
     void EndDash();
 
@@ -106,6 +116,14 @@ public:
     // ------------------------------------------------------------------------
     // Player reads the camera only to convert mouse screen coordinates to world coordinates
     void Update(float dt, const Camera2D& camera);
+
+    // Applies damage from any source (enemy, asteroid, boss, debug).
+    // Clamps health to [0, MAX] and marks the player dead at zero.
+    void TakeDamage(float damageAmount);
+
+    // Renders the HUD health bar in screen space (fixed position).
+    // Reads m_health internally — no getters needed.
+    void DrawHealthBar() const;
 
     // ------------------------------------------------------------------------
     // Draw

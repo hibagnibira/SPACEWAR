@@ -44,6 +44,8 @@ Player::Player(Vector2 startPosition, float worldWidth, float worldHeight)
     , m_isShooting(false)
     , m_fireTimer(0.0f)
     , m_shotRequested(false)
+    , m_health(PLAYER_STARTING_HEALTH)
+    , m_isDead(false)
 {
 }
 
@@ -57,6 +59,61 @@ void Player::EndDash()
     m_isDashing = false;
     m_dashTimer = 0.0f;
     m_dashCooldownTimer = DASH_COOLDOWN_DURATION;
+}
+
+// ----------------------------------------------------------------------------
+// TakeDamage
+// General-purpose damage entry point for all future damage sources.
+// Dead players ignore further damage; health is clamped to [0, MAX].
+// ----------------------------------------------------------------------------
+void Player::TakeDamage(float damageAmount)
+{
+    if (m_isDead || damageAmount <= 0.0f)
+    {
+        return; // Already dead or invalid amount: no state change
+    }
+
+    m_health -= damageAmount;
+
+    if (m_health <= 0.0f)
+    {
+        m_health = 0.0f;
+        m_isDead = true;
+    }
+}
+
+// ----------------------------------------------------------------------------
+// DrawHealthBar
+// Screen-space HUD element drawn by the player itself so health stays
+// encapsulated. Fixed position: it never moves with the camera.
+// ----------------------------------------------------------------------------
+void Player::DrawHealthBar() const
+{
+    constexpr int BAR_X = 20;
+    constexpr int BAR_Y = 50;   // below the "SPACEWAR" title
+    constexpr int BAR_WIDTH = 220;
+    constexpr int BAR_HEIGHT = 16;
+
+    // m_health is already clamped to [0, MAX], so fraction stays in [0,1]
+    const float fraction = m_health / PLAYER_MAX_HEALTH;
+
+    // Empty portion background + border
+    DrawRectangle(BAR_X, BAR_Y, BAR_WIDTH, BAR_HEIGHT, Color{ 35, 40, 55, 255 });
+    DrawRectangleLines(BAR_X, BAR_Y, BAR_WIDTH, BAR_HEIGHT, Color{ 90, 100, 130, 255 });
+
+    // Filled portion, colored by remaining health
+    const int fillWidth = static_cast<int>(BAR_WIDTH * fraction);
+    Color fillColor = Color{ 80, 220, 100, 255 };   // green: healthy
+    if (fraction <= 0.5f) fillColor = Color{ 240, 200, 60, 255 };  // yellow: hurt
+    if (fraction <= 0.25f) fillColor = Color{ 235, 70, 70, 255 };  // red: critical
+
+    if (fillWidth > 0)
+    {
+        DrawRectangle(BAR_X, BAR_Y, fillWidth, BAR_HEIGHT, fillColor);
+    }
+
+    // Numerical percentage next to the bar
+    DrawText(TextFormat("%d%%", static_cast<int>(m_health)), BAR_X + BAR_WIDTH + 10, BAR_Y - 2, 16, RAYWHITE);
 }
 
 // ----------------------------------------------------------------------------
