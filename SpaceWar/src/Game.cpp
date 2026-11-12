@@ -199,5 +199,17 @@ void Game::Draw()
     DrawText("Space      - Dash / Boost",      20, 322, 14, GRAY);
     DrawText("F1         - Debug damage (temporary)", 20, 340, 14, GRAY);
 
+    // GAME OVER overlay — visible only while the player is dead
+    if (m_player.m_isDead)
+    {
+        constexpr const char* gameOverText = "GAME OVER";
+        constexpr int fontSize = 64;
+        const int textWidth = MeasureText(gameOverText, fontSize);
+        DrawText(gameOverText,
+                 (m_screenWidth - textWidth) / 2,
+                 m_screenHeight / 2 - fontSize / 2,
+                 fontSize, RED);
+    }
+
     EndDrawing();
 }

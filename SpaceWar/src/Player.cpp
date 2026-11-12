@@ -79,6 +79,11 @@ void Player::TakeDamage(float damageAmount)
     {
         m_health = 0.0f;
         m_isDead = true;
+
+        // Death cleanup: stop all motion and cancel any active dash
+        m_velocity = { 0.0f, 0.0f };
+        m_isThrustingForward = false;
+        m_isDashing = false;
     }
 }
 
@@ -130,7 +135,9 @@ void Player::DrawHealthBar() const
 // ----------------------------------------------------------------------------
 void Player::Update(float dt, const Camera2D& camera)
 {
-    if (dt <= 0.0f)
+    // Dead players ignore all gameplay input: no movement, dash, or shooting.
+    // The ship stays frozen at its final position (Draw still renders it).
+    if (dt <= 0.0f || m_isDead)
     {
         return;
     }
