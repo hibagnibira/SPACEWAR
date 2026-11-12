@@ -34,27 +34,20 @@ int main()
     Player player(spawnPosition, worldWidth, worldHeight);
 
     // ------------------------------------------------------------------------
-    // Camera2D Configuration
-    // Initialized at spawnPosition without needing to query the player.
+    // Default Camera Framing (Rectangle Around Player)
+    // Define the exact width and height of the world area visible around the ship.
+    // Smaller numbers = closer/tighter rectangle; Larger numbers = wider view.
     // ------------------------------------------------------------------------
+    constexpr float viewRectWidth = 640.0f; // Width of visible area around ship
+    constexpr float viewRectHeight = 360.0f; // Height of visible area around ship
+
     Camera2D camera = { 0 };
     camera.target = spawnPosition;
-    camera.offset = Vector2{ screenWidth / 2.0f, screenHeight / 2.0f }; // Center target on screen
-    camera.rotation = 0.0f;                                               // Never rotate
-    // ------------------------------------------------------------------------
-    // Desired Visible Rectangle Size Around the Player (in World Units)
-    // Adjust these two numbers to make the visible area around the ship larger or smaller:
-    // ------------------------------------------------------------------------
-    constexpr float desiredViewWidth = 1600.0f; // Width of the area around the player
-    constexpr float desiredViewHeight = 900.0f;  // Height of the area around the player
+    camera.offset = Vector2{ screenWidth / 3.0f, screenHeight / 3.0f }; // Keeps player dead-center
+    camera.rotation = 0.0f;
 
-    // Calculate zoom factor to fit this rectangle onto your screen:
-    const float zoomX = static_cast<float>(screenWidth) / desiredViewWidth;
-    const float zoomY = static_cast<float>(screenHeight) / desiredViewHeight;
-
-    // Use the smaller scale factor so the entire rectangle fits without cropping
-    camera.zoom = (zoomX < zoomY) ? zoomX : zoomY;                                           // Fixed zoom
-
+    // Set fixed default zoom to 1.5x magnification
+    camera.zoom = 1.5f;
     // Deep space background color
     const Color spaceColor = Color{ 8, 10, 18, 255 };
 
@@ -66,23 +59,7 @@ int main()
         // --------------------------------------------------------------------
         // Update Phase
         // --------------------------------------------------------------------
-        // --------------------------------------------------------------------
-        // Mouse Wheel Zoom Control
-        // --------------------------------------------------------------------
-        const float wheel = GetMouseWheelMove();
-        if (wheel != 0.0f)
-        {
-            constexpr float ZOOM_INCREMENT = 0.1f;
-            camera.zoom += wheel * ZOOM_INCREMENT;
-
-            // Clamp zoom to prevent flipping the camera or extreme scaling
-            constexpr float MIN_ZOOM = 0.4f; // Zoomed out (see more world)
-            constexpr float MAX_ZOOM = 2.0f; // Zoomed in (closer look at ship)
-
-            if (camera.zoom < MIN_ZOOM) camera.zoom = MIN_ZOOM;
-            if (camera.zoom > MAX_ZOOM) camera.zoom = MAX_ZOOM;
-        }
-
+     
         const float dt = GetFrameTime();
 
         // The player automatically handles:
