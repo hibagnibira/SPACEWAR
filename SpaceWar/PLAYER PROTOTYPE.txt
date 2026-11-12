@@ -1,0 +1,336 @@
+PLAYER GAMEPLAY :
+# SPACEWAR — PLAYER SYSTEM DEVELOPMENT SPECIFICATION
+
+## 1. Player Overview
+
+The player controls a spaceship travelling through hostile space.
+
+The Player system is responsible for:
+- Movement and rotation.
+- Physics and acceleration.
+- Player input.
+- Health and damage.
+- Shooting.
+- Dash / boost.
+- Healing collection.
+- Player-related visual feedback.
+
+**Core principle:** Gameplay must be implemented and tested using placeholder graphics before introducing final sprites, animations, and visual effects.
+
+---
+
+## 2. Player Controls
+
+### Confirmed controls
+
+| Action | Input |
+|---|---|
+| Rotation | Mouse |
+| Forward thrust | W (recommended binding) |
+| Reverse thrust | S (recommended binding) |
+| Continuous shooting | Toggle using left mouse button (recommended binding) |
+| Dash / boost | Space |
+| Pause | Deferred to menu/UI development |
+
+The W and S bindings are recommended defaults rather than explicitly finalized key assignments.
+
+### Rotation
+
+- The spaceship continuously faces the mouse cursor.
+- Rotation is instantaneous toward the cursor.
+- The mouse controls the direction of aiming and thrust.
+
+### Pause
+
+Pause functionality and its interface will be addressed during menu/UI development, not the initial Player implementation.
+
+---
+
+## 3. Movement Physics
+
+**Status: CONFIRMED**
+
+SPACEWAR uses physics-based movement.
+
+### Movement behavior
+
+- The spaceship accelerates in the direction it faces.
+- Forward thrust activates through keyboard input.
+- Reverse thrust applies acceleration in the opposite direction.
+- Forward and reverse thrust have equal strength.
+- Releasing thrust does not stop the spaceship.
+- The spaceship gradually loses speed through natural drag.
+- Maximum normal speed is fixed.
+
+### Physics parameters
+
+| Parameter | Decision |
+|---|---|
+| Acceleration | Moderate |
+| Maximum speed | Fixed |
+| Natural drag | Slow |
+| Reverse thrust | Same strength as forward |
+| Rotation | Instant toward mouse |
+| Movement calculation | Velocity and acceleration |
+| Time calculation | Delta time |
+
+Exact numerical values will be tuned through testing.
+
+### Thruster effects
+
+- Exhaust appears behind the spaceship while thrust is active.
+- Exhaust stops when thrust is released.
+- Initial implementation uses simple placeholder shapes.
+
+---
+
+## 4. Dash / Boost
+
+**Status: CONFIRMED**
+
+- Activated manually using Space.
+- Boosts the spaceship in its current facing direction.
+- Temporarily exceeds normal maximum speed.
+- Lasts a few seconds.
+- Has a cooldown.
+- Can be activated while already at maximum normal speed.
+
+Exact duration, boost strength, and cooldown values will be determined through testing.
+
+---
+
+## 5. Camera and Environment
+
+**Status: CONFIRMED**
+
+### Camera
+
+- Smoothly follows the spaceship.
+- Keeps the spaceship at the center of the screen.
+- Uses fixed zoom.
+- Does not rotate with the spaceship.
+
+### Environment
+
+- Each level has defined boundaries.
+- Boundaries are invisible.
+- The player cannot leave the playable area.
+- Boundary collision should prevent the spaceship from escaping the level.
+
+---
+
+## 6. Health and Survival
+
+**Status: CONFIRMED / INITIAL BALANCING VALUES**
+
+### Health
+
+- Starting health: 100%.
+- Maximum health: 100%.
+- Health displayed through a health bar.
+
+### Lives
+
+- Initial number of lives: 3.
+- Lives are shared across the five-level campaign.
+- Death restarts the current level.
+- Previously completed levels remain completed.
+
+### Damage values
+
+| Damage source | Damage |
+|---|---:|
+| Level 1 enemy projectile | 2% |
+| Level 2 enemy projectile | 5% |
+| Level 3 enemy projectile | 8% |
+| Enemy contact | 10% |
+| Asteroid collision | 10% |
+| Boss attack | 10% |
+
+These are initial balancing values and may be adjusted after gameplay testing.
+
+### Temporary invulnerability
+
+**Confirmed duration: 1 second.**
+
+After receiving damage:
+- The player becomes temporarily invulnerable.
+- Additional damage is ignored during this period.
+- The purpose is to prevent overlapping collisions and projectiles from instantly draining the health bar.
+
+### Critical health
+
+When health reaches 10% or less:
+- A heartbeat-like screen effect begins.
+- Screen darkening remains subtle.
+- The spaceship flashes red relatively quickly.
+- Future audio effects will reinforce the warning.
+
+### Death sequence
+
+1. Health reaches zero.
+2. One life is deducted immediately.
+3. Player movement, rotation, and shooting are disabled.
+4. A black hole appears.
+5. The black hole consumes the spaceship.
+6. The current level restarts.
+7. The spaceship emerges from a black hole as the level begins.
+
+The animation should be brief but clear.
+
+---
+
+## 7. Healing Stones
+
+**Status: CONFIRMED**
+
+| Property | Decision |
+|---|---|
+| Healing per stone | 1% |
+| Disappearance time | 3 seconds |
+| Spawn positions | Random |
+| Spawn frequency | Scaled according to player health |
+| Collection at full health | Allowed, without increasing health |
+
+### Spawn behavior
+
+Healing stones should appear randomly.
+
+Their spawn frequency should increase when the player's health is low.
+
+This creates additional opportunities for recovery when the player is struggling.
+
+The exact health thresholds, spawn probabilities, and minimum/maximum spawn intervals remain to be determined.
+
+### Collection
+
+- A stone disappears after collection.
+- It restores 1% health.
+- A stone disappears automatically after three seconds if not collected.
+- Collecting a stone at full health does not increase health above 100%.
+
+---
+
+## 8. Shooting System
+
+**Status: PARTIALLY CONFIRMED**
+
+### Starting weapon
+
+The player starts with a basic shooter.
+
+### Shooting activation
+
+**Toggle mode:**
+- Press the shooting button once to activate continuous shooting.
+- Press it again to deactivate shooting.
+
+The left mouse button is the recommended binding.
+
+### Projectile behavior
+
+- One projectile is fired per shot.
+- Continuous shooting can produce multiple successive projectiles.
+- Projectiles travel in the direction the spaceship faces.
+- Projectile speed is fixed.
+- A projectile disappears after hitting an enemy.
+- A projectile that misses disappears after reaching its maximum lifetime or travel distance.
+
+### Firing frequency
+
+Medium firing frequency.
+
+The exact firing interval remains to be tuned.
+
+Projectile creation and behavior belong to the Bullet system, not exclusively to Player.
+
+---
+
+## 9. Future Player Abilities
+
+### Shooting Stars
+
+A future special attack:
+- Can destroy enemies.
+- Can damage bosses.
+- Will not be available in the earliest levels.
+
+### Black Hole Portal
+
+A future ability planned for a later or final level:
+- Transports the player to another position in the environment.
+- Can be used to evade enemy attacks.
+- Allows the player to attack from another position.
+
+This ability is separate from the black hole death animation.
+
+---
+
+## 10. Player Visual Feedback
+
+Initial placeholder representations:
+
+| Element | Representation |
+|---|---|
+| Spaceship | Simple polygon |
+| Exhaust | Simple shapes |
+| Health bar | Rectangle |
+| Damage effect | Basic explosion |
+| Critical health | Red flashing |
+| Death | Placeholder black hole |
+| Healing stone | Small colored shape |
+| Projectiles | Small circles or rectangles |
+
+Final sprites, detailed animations, and audio will be introduced after gameplay validation.
+
+---
+
+## 11. C++ Implementation Structure
+
+### Player.h
+
+Declares:
+- Player class.
+- Position and velocity.
+- Acceleration and movement properties.
+- Health and lives-related state where appropriate.
+- Shooting state.
+- Dash state and cooldown.
+- Public methods.
+
+### Player.cpp
+
+Implements:
+- Mouse-controlled rotation.
+- Forward and reverse thrust.
+- Physics and momentum.
+- Dash behavior.
+- Health and damage.
+- Invulnerability timer.
+- Shooting activation.
+- Player drawing and visual feedback.
+
+---
+
+## 12. Recommended Development Order
+
+1. Create the Player class.
+2. Draw a placeholder spaceship.
+3. Implement mouse-controlled rotation.
+4. Implement forward thrust.
+5. Implement momentum and natural drag.
+6. Implement reverse thrust.
+7. Implement maximum speed.
+8. Implement camera following.
+9. Implement invisible environment boundaries.
+10. Implement dash and cooldown.
+11. Implement health and damage.
+12. Implement temporary invulnerability.
+13. Implement health bar and critical-health effects.
+14. Implement continuous shooting and connect Bullet.
+15. Implement healing stone collection.
+16. Implement death and respawn behavior.
+17. Test and balance the complete Player system.
+
+---
+**The Player system must be fully functional and tested before introducing advanced gameplay and visual polish.**
