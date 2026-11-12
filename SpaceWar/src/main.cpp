@@ -25,9 +25,35 @@ int main()
         static_cast<float>(screenHeight) / 2.0f
     };
 
-    Player player(spawnPosition,
-        static_cast<float>(screenWidth),
-        static_cast<float>(screenHeight));
+    // Configurable playable world larger than the viewport
+    constexpr float worldWidth = 2400.0f;
+    constexpr float worldHeight = 1800.0f;
+
+    // const Vector2 spawnPosition = { worldWidth / 2.0f, worldHeight / 2.0f };
+
+    Player player(spawnPosition, worldWidth, worldHeight);
+
+    // ------------------------------------------------------------------------
+    // Camera2D Configuration
+    // Initialized at spawnPosition without needing to query the player.
+    // ------------------------------------------------------------------------
+    Camera2D camera = { 0 };
+    camera.target = spawnPosition;
+    camera.offset = Vector2{ screenWidth / 2.0f, screenHeight / 2.0f }; // Center target on screen
+    camera.rotation = 0.0f;                                               // Never rotate
+    // ------------------------------------------------------------------------
+    // Desired Visible Rectangle Size Around the Player (in World Units)
+    // Adjust these two numbers to make the visible area around the ship larger or smaller:
+    // ------------------------------------------------------------------------
+    constexpr float desiredViewWidth = 1600.0f; // Width of the area around the player
+    constexpr float desiredViewHeight = 900.0f;  // Height of the area around the player
+
+    // Calculate zoom factor to fit this rectangle onto your screen:
+    const float zoomX = static_cast<float>(screenWidth) / desiredViewWidth;
+    const float zoomY = static_cast<float>(screenHeight) / desiredViewHeight;
+
+    // Use the smaller scale factor so the entire rectangle fits without cropping
+    camera.zoom = (zoomX < zoomY) ? zoomX : zoomY;                                           // Fixed zoom
 
     // Deep space background color
     const Color spaceColor = Color{ 8, 10, 18, 255 };
@@ -40,6 +66,23 @@ int main()
         // --------------------------------------------------------------------
         // Update Phase
         // --------------------------------------------------------------------
+        // --------------------------------------------------------------------
+        // Mouse Wheel Zoom Control
+        // --------------------------------------------------------------------
+        const float wheel = GetMouseWheelMove();
+        if (wheel != 0.0f)
+        {
+            constexpr float ZOOM_INCREMENT = 0.1f;
+            camera.zoom += wheel * ZOOM_INCREMENT;
+
+            // Clamp zoom to prevent flipping the camera or extreme scaling
+            constexpr float MIN_ZOOM = 0.4f; // Zoomed out (see more world)
+            constexpr float MAX_ZOOM = 2.0f; // Zoomed in (closer look at ship)
+
+            if (camera.zoom < MIN_ZOOM) camera.zoom = MIN_ZOOM;
+            if (camera.zoom > MAX_ZOOM) camera.zoom = MAX_ZOOM;
+        }
+
         const float dt = GetFrameTime();
 
         // The player automatically handles:
@@ -48,7 +91,8 @@ int main()
         // - Smoothly decelerating as it arrives (no overshoot / no oscillation)
         // - Stopping completely at STOP_DISTANCE
         // - Clamping to world boundaries
-        player.Update(dt);
+        // Tell the player to update its movement and track the camera
+        player.Update(dt, camera);
 
         // --------------------------------------------------------------------
         // Render Phase
@@ -57,35 +101,44 @@ int main()
 
         ClearBackground(spaceColor);
 
-        // Draw a subtle reference grid to make movement and deceleration visible
-        constexpr int gridSize = 60;
+        // ----------------------------------------------------------------
+        // 1. World Space Rendering (Inside Camera Transformation)
+        // ----------------------------------------------------------------
+        BeginMode2D(camera);
+
+        // Playable world reference grid
+        constexpr int gridSize = 80;
         const Color gridColor = Color{ 25, 30, 45, 255 };
 
-        for (int x = 0; x < screenWidth; x += gridSize)
+        for (int x = 0; x <= static_cast<int>(worldWidth); x += gridSize)
         {
-            DrawLine(x, 0, x, screenHeight, gridColor);
+            DrawLine(x, 0, x, static_cast<int>(worldHeight), gridColor);
         }
-        for (int y = 0; y < screenHeight; y += gridSize)
+        for (int y = 0; y <= static_cast<int>(worldHeight); y += gridSize)
         {
-            DrawLine(0, y, screenWidth, y, gridColor);
+            DrawLine(0, y, static_cast<int>(worldWidth), y, gridColor);
         }
 
-        // Draw a visual target reticle at the mouse cursor
-        const Vector2 mousePos = GetMousePosition();
-        DrawCircleLinesV(mousePos, 10.0f, Color{ 80, 160, 240, 120 });
-        DrawCircleV(mousePos, 2.0f, Color{ 120, 200, 255, 200 });
+        // Playable boundary border
+        DrawRectangleLinesEx(Rectangle{ 0.0f, 0.0f, worldWidth, worldHeight }, 4.0f, Fade(RED, 0.6f));
 
-        // Draw the spaceship and thruster exhaust
+        // Mouse cursor target indicator in world coordinates
+        const Vector2 mouseWorldPos = GetScreenToWorld2D(GetMousePosition(), camera);
+        DrawCircleLinesV(mouseWorldPos, 10.0f, Color{ 80, 160, 240, 140 });
+        DrawCircleV(mouseWorldPos, 2.0f, Color{ 120, 200, 255, 200 });
+
+        // Render spaceship
         player.Draw();
 
+        EndMode2D();
+
         // ----------------------------------------------------------------
-        // Diagnostic & Instruction Overlay
+        // 2. Screen Space Rendering (Fixed UI / HUD - Outside Camera)
         // ----------------------------------------------------------------
-        DrawText("SPACEWAR: Autonomous Mouse-Following Test", 20, 20, 20, RAYWHITE);
-        DrawText("- Move mouse to guide the spaceship", 20, 50, 16, LIGHTGRAY);
-        DrawText("- Ship accelerates up to 420 px/s", 20, 72, 16, LIGHTGRAY);
-        DrawText("- Ship smoothly decelerates and stops at cursor (no overshoot)", 20, 94, 16, LIGHTGRAY);
-        DrawText("- Thruster flames extinguish automatically upon arrival", 20, 116, 16, GRAY);
+        DrawText("SPACEWAR: Camera Following System", 20, 20, 20, RAYWHITE);
+        DrawText("- Encapsulated camera tracking (Zero getters/setters)", 20, 50, 16, LIGHTGRAY);
+        DrawText("- Mouse coordinates converted to world space via GetScreenToWorld2D", 20, 72, 16, LIGHTGRAY);
+        DrawText("- Red border outlines playable world boundaries", 20, 94, 16, LIGHTGRAY);
 
         DrawFPS(screenWidth - 100, 20);
 

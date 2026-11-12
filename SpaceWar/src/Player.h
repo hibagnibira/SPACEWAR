@@ -72,7 +72,9 @@ public:
     //  5. Maximum speed clamp.
     //  6. Position integration and boundary enforcement.
     // ------------------------------------------------------------------------
-    void Update(float dt);
+    // Autonomous behavioral update: converts mouse coordinates to world space,
+    // applies Option A movement, enforces boundaries, and smoothly guides the camera.
+    void Update(float dt, Camera2D& camera);
 
     // ------------------------------------------------------------------------
     // Draw

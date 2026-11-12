@@ -47,80 +47,60 @@ Player::Player(Vector2 startPosition, float worldWidth, float worldHeight)
 //modify update 
 // Automatically steers toward the mouse cursor with smooth arrival deceleration,
 // eliminating overshooting and oscillation without any keyboard input.
-void Player::Update(float dt)
+// ----------------------------------------------------------------------------
+// Update
+// Autonomous execution of Option A movement, world boundary clamping,
+// and smooth camera target following without exposing private state.
+// ----------------------------------------------------------------------------
+void Player::Update(float dt, Camera2D& camera)
 {
-    // Guard against invalid delta times (e.g., window minimization or frame hitch)
     if (dt <= 0.0f)
     {
         return;
     }
 
     // ------------------------------------------------------------------------
-    // 1. Target Vector & Distance Calculation
+    // 1. Mouse Screen-to-World Coordinate Conversion
     // ------------------------------------------------------------------------
-    const Vector2 mousePos = GetMousePosition();
-    const float diffX = mousePos.x - m_position.x;
-    const float diffY = mousePos.y - m_position.y;
+    const Vector2 mouseScreenPos = GetMousePosition();
+    const Vector2 mouseWorldPos = GetScreenToWorld2D(mouseScreenPos, camera);
+
+    const float diffX = mouseWorldPos.x - m_position.x;
+    const float diffY = mouseWorldPos.y - m_position.y;
     const float dist = std::hypot(diffX, diffY);
 
     // ------------------------------------------------------------------------
-    // 2. Arrival & Stopping Logic (No Oscillation / No Overshoot)
+    // 2. Option A Movement (Direct Velocity, Zero Inertia/Drag)
     // ------------------------------------------------------------------------
     if (dist <= STOP_DISTANCE)
     {
-        // Stop completely once the cursor target is reached
         m_velocity = { 0.0f, 0.0f };
         m_isThrustingForward = false;
     }
     else
     {
-        // Face toward the mouse cursor instantaneously
         m_rotation = std::atan2(diffY, diffX);
 
-        // Calculate desired speed: ramp down linearly inside the slowing radius
-        float desiredSpeed = m_maxSpeed;
+        // Smooth speed ramp-down inside the slowing radius (capped at 420 px/s)
+        float currentSpeed = m_maxSpeed;
         if (dist < SLOWING_RADIUS)
         {
-            desiredSpeed = m_maxSpeed * (dist / SLOWING_RADIUS);
+            currentSpeed = m_maxSpeed * (dist / SLOWING_RADIUS);
         }
 
-        // Desired velocity pointing directly at the cursor
-        const Vector2 desiredVelocity = {
-            (diffX / dist) * desiredSpeed,
-            (diffY / dist) * desiredSpeed
-        };
+        m_velocity.x = (diffX / dist) * currentSpeed;
+        m_velocity.y = (diffY / dist) * currentSpeed;
 
-        // Frame-rate independent exponential smoothing (critically damped: zero overshoot)
-        constexpr float STEERING_RESPONSE = 6.0f;
-        const float blend = 1.0f - std::exp(-STEERING_RESPONSE * dt);
-
-        m_velocity.x += (desiredVelocity.x - m_velocity.x) * blend;
-        m_velocity.y += (desiredVelocity.y - m_velocity.y) * blend;
-
-        // Visual thruster active when actively accelerating toward distant cursor
-        m_isThrustingForward = (desiredSpeed > 25.0f);
+        m_isThrustingForward = (currentSpeed > 20.0f);
     }
 
     // ------------------------------------------------------------------------
-    // 3. Maximum Speed Clamp (Safety Cap at 420 px/sec)
-    // ------------------------------------------------------------------------
-    const float speedSquared = (m_velocity.x * m_velocity.x) + (m_velocity.y * m_velocity.y);
-    if (speedSquared > (m_maxSpeed * m_maxSpeed))
-    {
-        const float currentSpeed = std::sqrt(speedSquared);
-        const float normalizer = m_maxSpeed / currentSpeed;
-
-        m_velocity.x *= normalizer;
-        m_velocity.y *= normalizer;
-    }
-
-    // ------------------------------------------------------------------------
-    // 4. Position Integration with Single-Frame Overshoot Protection
+    // 3. Position Integration & Arrival Step Clamping
     // ------------------------------------------------------------------------
     const float stepDist = std::hypot(m_velocity.x * dt, m_velocity.y * dt);
     if (stepDist >= dist && dist > 0.0f)
     {
-        m_position = mousePos;
+        m_position = mouseWorldPos;
         m_velocity = { 0.0f, 0.0f };
         m_isThrustingForward = false;
     }
@@ -131,7 +111,7 @@ void Player::Update(float dt)
     }
 
     // ------------------------------------------------------------------------
-    // 5. World Boundary Enforcement
+    // 4. World Boundary Enforcement
     // ------------------------------------------------------------------------
     if (m_position.x < SHIP_COLLISION_RADIUS)
     {
@@ -154,8 +134,17 @@ void Player::Update(float dt)
         m_position.y = m_worldHeight - SHIP_COLLISION_RADIUS;
         m_velocity.y = 0.0f;
     }
-}
 
+    // ------------------------------------------------------------------------
+    // 5. Smooth Camera Follow (Internal Encapsulation)
+    // The player directly updates camera.target toward its private m_position.
+    // ------------------------------------------------------------------------
+    constexpr float CAMERA_FOLLOW_SPEED = 5.0f; // Interpolation responsiveness
+    const float cameraBlend = 1.0f - std::exp(-CAMERA_FOLLOW_SPEED * dt);
+
+    camera.target.x += (m_position.x - camera.target.x) * cameraBlend;
+    camera.target.y += (m_position.y - camera.target.y) * cameraBlend;
+}
 // ----------------------------------------------------------------------------
 // Draw
 // Renders the internal visual representation of the ship and active thrusters.
