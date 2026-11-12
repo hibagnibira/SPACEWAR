@@ -126,6 +126,10 @@ public:
     // Clamps health to [0, MAX] and marks the player dead at zero.
     void TakeDamage(float damageAmount);
 
+    // Restores health by amount, clamped to PLAYER_MAX_HEALTH.
+    // Does not interact with invulnerability. Ignored while dead.
+    void Heal(float healAmount);
+
     // Renders the HUD health bar in screen space (fixed position).
     // Reads m_health internally — no getters needed.
     void DrawHealthBar() const;

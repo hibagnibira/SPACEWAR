@@ -97,6 +97,25 @@ void Player::TakeDamage(float damageAmount)
 }
 
 // ----------------------------------------------------------------------------
+// Heal
+// Restores health up to the maximum. Independent of the invulnerability
+// system: healing neither grants nor resets protection.
+// ----------------------------------------------------------------------------
+void Player::Heal(float healAmount)
+{
+    if (m_isDead || healAmount <= 0.0f)
+    {
+        return;
+    }
+
+    m_health += healAmount;
+    if (m_health > PLAYER_MAX_HEALTH)
+    {
+        m_health = PLAYER_MAX_HEALTH;
+    }
+}
+
+// ----------------------------------------------------------------------------
 // DrawHealthBar
 // Screen-space HUD element drawn by the player itself so health stays
 // encapsulated. Fixed position: it never moves with the camera.

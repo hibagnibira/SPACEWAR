@@ -15,6 +15,17 @@
 constexpr int   DEBUG_DAMAGE_KEY = KEY_F1;
 constexpr float DEBUG_DAMAGE_AMOUNT = 10.0f;
 
+// ----------------------------------------------------------------------------
+// Healing Stone Spawning (initial balancing values)
+// ----------------------------------------------------------------------------
+// No stones spawn while player health is above 50% — the timer re-checks
+// periodically so spawning resumes as soon as health drops to 50% or below.
+constexpr float HEALING_STONE_SPAWN_RECHECK_INTERVAL = 1.0f;
+constexpr float HEALING_STONE_SPAWN_INTERVAL_MID  = 5.0f;  // health 31%-50%
+constexpr float HEALING_STONE_SPAWN_INTERVAL_LOW  = 3.0f;  // health <= 30%
+constexpr float HEALING_STONE_MIN_PLAYER_DISTANCE = 100.0f; // world units
+constexpr int   HEALING_STONE_MAX_SPAWN_ATTEMPTS  = 20;
+
 Game::Game(int screenWidth, int screenHeight)
     : m_screenWidth(screenWidth)
     , m_screenHeight(screenHeight)
@@ -22,6 +33,7 @@ Game::Game(int screenWidth, int screenHeight)
     , m_worldHeight(1800.0f)
     , m_player({ 1200.0f, 900.0f }, 2400.0f, 1800.0f) // Spawn at center of arena
     , m_camera{ 0 }
+    , m_stoneSpawnTimer(0.0f)
 {
     // Deterministic starfield generation (stable across runs)
     constexpr int STAR_COUNT = 400;
@@ -76,6 +88,9 @@ void Game::Update(float dt)
 
     // 3. Update projectiles
     UpdateBullets(dt);
+
+    // 3b. Update healing stones (spawn timer, lifetime, collection)
+    UpdateHealingStones(dt);
 
     // Temporary debug damage (single press per hit, not per frame)
     if (IsKeyPressed(DEBUG_DAMAGE_KEY))
@@ -137,6 +152,119 @@ void Game::UpdateBullets(float dt)
         m_bullets.end());
 }
 
+// ----------------------------------------------------------------------------
+// Healing Stones
+// ----------------------------------------------------------------------------
+
+void Game::TrySpawnHealingStone()
+{
+    // Spawn rules scale with current player health (Game is a Player friend)
+    const float health = m_player.m_health;
+
+    if (health > 50.0f)
+    {
+        // Above 50%: no spawning. Re-check soon so spawning resumes
+        // promptly when health drops to 50% or below.
+        m_stoneSpawnTimer = HEALING_STONE_SPAWN_RECHECK_INTERVAL;
+        return;
+    }
+
+    float interval = HEALING_STONE_SPAWN_INTERVAL_MID; // 31%-50%
+    if (health <= 30.0f)
+    {
+        interval = HEALING_STONE_SPAWN_INTERVAL_LOW;
+    }
+    m_stoneSpawnTimer = interval;
+
+    Vector2 spawnPos;
+    if (TryFindStoneSpawnPos(spawnPos))
+    {
+        m_healingStones.emplace_back(spawnPos);
+    }
+    // If no valid spot was found, this spawn attempt is safely skipped
+}
+
+bool Game::TryFindStoneSpawnPos(Vector2& outPos) const
+{
+    // Visible world rectangle: camera.target is the smoothed view center,
+    // zoom scales the visible half-extents around it.
+    const float halfViewW = (m_screenWidth * 0.5f) / m_camera.zoom;
+    const float halfViewH = (m_screenHeight * 0.5f) / m_camera.zoom;
+
+    // Intersect the view rect with the playable world bounds
+    const float minX = std::max(m_camera.target.x - halfViewW, 0.0f);
+    const float maxX = std::min(m_camera.target.x + halfViewW, m_worldWidth);
+    const float minY = std::max(m_camera.target.y - halfViewH, 0.0f);
+    const float maxY = std::min(m_camera.target.y + halfViewH, m_worldHeight);
+
+    if (maxX <= minX || maxY <= minY)
+    {
+        return false;
+    }
+
+    const float minDistSq = HEALING_STONE_MIN_PLAYER_DISTANCE * HEALING_STONE_MIN_PLAYER_DISTANCE;
+
+    // Limited attempts: give up rather than risk an infinite loop
+    for (int attempt = 0; attempt < HEALING_STONE_MAX_SPAWN_ATTEMPTS; ++attempt)
+    {
+        const float rx = static_cast<float>(GetRandomValue(0, 1000000)) / 1000000.0f;
+        const float ry = static_cast<float>(GetRandomValue(0, 1000000)) / 1000000.0f;
+
+        const float x = minX + rx * (maxX - minX);
+        const float y = minY + ry * (maxY - minY);
+
+        const float dx = x - m_player.m_position.x;
+        const float dy = y - m_player.m_position.y;
+        if (dx * dx + dy * dy >= minDistSq)
+        {
+            outPos = { x, y };
+            return true;
+        }
+    }
+
+    return false;
+}
+
+void Game::UpdateHealingStones(float dt)
+{
+    // While the player is dead the whole system freezes: no spawning,
+    // no lifetime countdown, no collection. Stones keep their positions
+    // and resume normally after respawn.
+    if (m_player.m_isDead)
+    {
+        return;
+    }
+
+    // Spawn countdown; interval is re-evaluated from health at each spawn
+    m_stoneSpawnTimer -= dt;
+    if (m_stoneSpawnTimer <= 0.0f)
+    {
+        TrySpawnHealingStone();
+    }
+
+    // Age stones, handle collection, and remove expired/collected safely
+    for (auto it = m_healingStones.begin(); it != m_healingStones.end(); )
+    {
+        it->Update(dt);
+
+        if (it->IsExpired())
+        {
+            it = m_healingStones.erase(it);
+            continue;
+        }
+
+        // Collection: stone radius + ship collision radius overlap
+        if (it->Overlaps(m_player.m_position, SHIP_COLLISION_RADIUS))
+        {
+            m_player.Heal(HEALING_AMOUNT);
+            it = m_healingStones.erase(it);
+            continue;
+        }
+
+        ++it;
+    }
+}
+
 void Game::Draw()
 {
     BeginDrawing();
@@ -185,6 +313,12 @@ void Game::Draw()
     for (const Bullet& bullet : m_bullets)
     {
         bullet.Draw();
+    }
+
+    // Healing stones
+    for (const HealingStone& stone : m_healingStones)
+    {
+        stone.Draw();
     }
 
     EndMode2D();

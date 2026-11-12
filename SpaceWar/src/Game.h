@@ -41,6 +41,7 @@
 #include "Boss.h"
 #include "AssetManager.h"
 #include "Bullet.h"
+#include "HealingStone.h"
 
 enum class GameState
 {
@@ -77,6 +78,8 @@ private:
     };
     std::vector<Star> m_stars;
     std::vector<Bullet> m_bullets; // Active player projectiles
+    std::vector<HealingStone> m_healingStones; // Active healing pickups
+    float m_stoneSpawnTimer;                   // Countdown to next spawn attempt
 
     // Internal helper to smoothly move camera.target toward m_player.m_position
     void UpdateCamera(float dt);
@@ -84,6 +87,11 @@ private:
     // Projectile management
     void SpawnPlayerBullet();
     void UpdateBullets(float dt);
+
+    // Healing stone management
+    void UpdateHealingStones(float dt);
+    void TrySpawnHealingStone();
+    bool TryFindStoneSpawnPos(Vector2& outPos) const;
 
 public:
     Game(int screenWidth = 1280, int screenHeight = 720);
