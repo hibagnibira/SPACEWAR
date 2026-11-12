@@ -27,6 +27,9 @@ constexpr float DEFAULT_MAX_SPEED = 420.0f; // Maximum linear velocity (pixels/s
 constexpr float DEFAULT_DRAG = 0.45f;  // Weak drag coefficient to slow down gradually
 constexpr float SHIP_COLLISION_RADIUS = 18.0f;  // Approximate radius used for boundary checks
 
+constexpr float STOP_DISTANCE = 6.0f;   // Distance to the cursor at which the ship comes to a full stop
+constexpr float SLOWING_RADIUS = 180.0f; // Radius at which the ship begins decelerating to eliminate overshoot
+
 class Player
 {
 
@@ -47,7 +50,8 @@ private:
 
     // Input & Thruster State (tracked for rendering thruster exhaust)
     bool m_isThrustingForward;
-    bool m_isThrustingReverse; 
+    //remove bool m_isThrustingReverse; because keyboard reverse movement (S key) is removed in favor of automatic mouse tracking, tracking reverse thrust is no longer needed.
+
 
 public:
     // ------------------------------------------------------------------------

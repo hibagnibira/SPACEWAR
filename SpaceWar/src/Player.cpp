@@ -16,7 +16,7 @@ static inline Vector2 RotateLocalPoint(Vector2 point, float angleRadians)
     const float cosAngle = std::cos(angleRadians);
     const float sinAngle = std::sin(angleRadians);
 
-    //basic maths duh
+
     return Vector2{
         point.x * cosAngle - point.y * sinAngle,
         point.x * sinAngle + point.y * cosAngle
@@ -37,7 +37,6 @@ Player::Player(Vector2 startPosition, float worldWidth, float worldHeight)
     , m_worldWidth(worldWidth)
     , m_worldHeight(worldHeight)
     , m_isThrustingForward(false)
-    , m_isThrustingReverse(false)
 {
 }
 
@@ -45,69 +44,65 @@ Player::Player(Vector2 startPosition, float worldWidth, float worldHeight)
 // Update
 // Encapsulates all per-frame input handling, physics integration, and bounds.
 // ----------------------------------------------------------------------------
+//modify update 
+// Automatically steers toward the mouse cursor with smooth arrival deceleration,
+// eliminating overshooting and oscillation without any keyboard input.
 void Player::Update(float dt)
 {
-    // Guard against non-positive delta times (e.g. paused execution or frame hitch)
+    // Guard against invalid delta times (e.g., window minimization or frame hitch)
     if (dt <= 0.0f)
     {
         return;
     }
 
     // ------------------------------------------------------------------------
-    // 1. Instantaneous Mouse Aiming
-    // The ship continuously calculates the directional vector to the mouse cursor.
+    // 1. Target Vector & Distance Calculation
     // ------------------------------------------------------------------------
     const Vector2 mousePos = GetMousePosition();
     const float diffX = mousePos.x - m_position.x;
     const float diffY = mousePos.y - m_position.y;
-
-    m_rotation = std::atan2(diffY, diffX);
-
-    // ------------------------------------------------------------------------
-    // 2. Facing Unit Vector
-    // Determines the forward axis along which thrust is applied.
-    // ------------------------------------------------------------------------
-    const Vector2 forward = { std::cos(m_rotation), std::sin(m_rotation) };
+    const float dist = std::hypot(diffX, diffY);
 
     // ------------------------------------------------------------------------
-    // 3. Thrust Input & Acceleration
-    // W: Accelerate forward.
-    // S: Accelerate backward (reverse thrusters with identical force).
+    // 2. Arrival & Stopping Logic (No Oscillation / No Overshoot)
     // ------------------------------------------------------------------------
-    m_isThrustingForward = IsKeyDown(KEY_W);
-    m_isThrustingReverse = IsKeyDown(KEY_S);
-
-    if (m_isThrustingForward)
+    if (dist <= STOP_DISTANCE)
     {
-        m_velocity.x += forward.x * m_acceleration * dt;
-        m_velocity.y += forward.y * m_acceleration * dt;
-    }
-
-    if (m_isThrustingReverse)
-    {
-        m_velocity.x -= forward.x * m_acceleration * dt;
-        m_velocity.y -= forward.y * m_acceleration * dt;
-    }
-
-    // ------------------------------------------------------------------------
-    // 4. Natural Drag / Velocity Damping
-    // Gradually diminishes velocity over time without sudden stops, preserving
-    // drift momentum when thrust keys are released.
-    // ------------------------------------------------------------------------
-    const float dragFactor = 1.0f - (m_drag * dt);
-    if (dragFactor > 0.0f)
-    {
-        m_velocity.x *= dragFactor;
-        m_velocity.y *= dragFactor;
+        // Stop completely once the cursor target is reached
+        m_velocity = { 0.0f, 0.0f };
+        m_isThrustingForward = false;
     }
     else
     {
-        m_velocity = { 0.0f, 0.0f };
+        // Face toward the mouse cursor instantaneously
+        m_rotation = std::atan2(diffY, diffX);
+
+        // Calculate desired speed: ramp down linearly inside the slowing radius
+        float desiredSpeed = m_maxSpeed;
+        if (dist < SLOWING_RADIUS)
+        {
+            desiredSpeed = m_maxSpeed * (dist / SLOWING_RADIUS);
+        }
+
+        // Desired velocity pointing directly at the cursor
+        const Vector2 desiredVelocity = {
+            (diffX / dist) * desiredSpeed,
+            (diffY / dist) * desiredSpeed
+        };
+
+        // Frame-rate independent exponential smoothing (critically damped: zero overshoot)
+        constexpr float STEERING_RESPONSE = 6.0f;
+        const float blend = 1.0f - std::exp(-STEERING_RESPONSE * dt);
+
+        m_velocity.x += (desiredVelocity.x - m_velocity.x) * blend;
+        m_velocity.y += (desiredVelocity.y - m_velocity.y) * blend;
+
+        // Visual thruster active when actively accelerating toward distant cursor
+        m_isThrustingForward = (desiredSpeed > 25.0f);
     }
 
     // ------------------------------------------------------------------------
-    // 5. Maximum Speed Clamping
-    // Enforces the top speed limit without altering the direction of movement.
+    // 3. Maximum Speed Clamp (Safety Cap at 420 px/sec)
     // ------------------------------------------------------------------------
     const float speedSquared = (m_velocity.x * m_velocity.x) + (m_velocity.y * m_velocity.y);
     if (speedSquared > (m_maxSpeed * m_maxSpeed))
@@ -120,15 +115,23 @@ void Player::Update(float dt)
     }
 
     // ------------------------------------------------------------------------
-    // 6. Position Integration
-    // Integrates current velocity into position over the elapsed frame time.
+    // 4. Position Integration with Single-Frame Overshoot Protection
     // ------------------------------------------------------------------------
-    m_position.x += m_velocity.x * dt;
-    m_position.y += m_velocity.y * dt;
+    const float stepDist = std::hypot(m_velocity.x * dt, m_velocity.y * dt);
+    if (stepDist >= dist && dist > 0.0f)
+    {
+        m_position = mousePos;
+        m_velocity = { 0.0f, 0.0f };
+        m_isThrustingForward = false;
+    }
+    else
+    {
+        m_position.x += m_velocity.x * dt;
+        m_position.y += m_velocity.y * dt;
+    }
 
     // ------------------------------------------------------------------------
-    // 7. World Boundary Enforcement
-    // The player prevents its own boundary violation autonomously.
+    // 5. World Boundary Enforcement
     // ------------------------------------------------------------------------
     if (m_position.x < SHIP_COLLISION_RADIUS)
     {
@@ -209,34 +212,7 @@ void Player::Draw() const
         DrawTriangle(worldFlameTipOuter, worldFlameRight, worldFlameLeft, ORANGE);
         DrawTriangle(worldFlameTipInner, worldFlameRightIn, worldFlameLeftIn, YELLOW);
     }
-    else if (m_isThrustingReverse)
-    {
-        // Forward-facing retro thruster jets
-        const Vector2 localRevLeftTip = { 4.0f, -12.0f };
-        const Vector2 localRevLeftA = { -2.0f, -10.0f };
-        const Vector2 localRevLeftB = { -2.0f, -14.0f };
-
-        const Vector2 localRevRightTip = { 4.0f,  12.0f };
-        const Vector2 localRevRightA = { -2.0f,  14.0f };
-        const Vector2 localRevRightB = { -2.0f,  10.0f };
-
-        const Vector2 wRevLTip = { m_position.x + RotateLocalPoint(localRevLeftTip, m_rotation).x,
-                                   m_position.y + RotateLocalPoint(localRevLeftTip, m_rotation).y };
-        const Vector2 wRevLA = { m_position.x + RotateLocalPoint(localRevLeftA, m_rotation).x,
-                                   m_position.y + RotateLocalPoint(localRevLeftA, m_rotation).y };
-        const Vector2 wRevLB = { m_position.x + RotateLocalPoint(localRevLeftB, m_rotation).x,
-                                   m_position.y + RotateLocalPoint(localRevLeftB, m_rotation).y };
-
-        const Vector2 wRevRTip = { m_position.x + RotateLocalPoint(localRevRightTip, m_rotation).x,
-                                   m_position.y + RotateLocalPoint(localRevRightTip, m_rotation).y };
-        const Vector2 wRevRA = { m_position.x + RotateLocalPoint(localRevRightA, m_rotation).x,
-                                   m_position.y + RotateLocalPoint(localRevRightA, m_rotation).y };
-        const Vector2 wRevRB = { m_position.x + RotateLocalPoint(localRevRightB, m_rotation).x,
-                                   m_position.y + RotateLocalPoint(localRevRightB, m_rotation).y };
-
-        DrawTriangle(wRevLTip, wRevLB, wRevLA, SKYBLUE);
-        DrawTriangle(wRevRTip, wRevRB, wRevRA, SKYBLUE);
-    }
+   
 
     // ------------------------------------------------------------------------
     // Draw Spaceship Hull & Cockpit
