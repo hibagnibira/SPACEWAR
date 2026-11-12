@@ -51,6 +51,9 @@ constexpr float FIRE_INTERVAL = 0.25f;
 constexpr float PLAYER_MAX_HEALTH = 100.0f;      // Health is a percentage: 0-100
 constexpr float PLAYER_STARTING_HEALTH = 100.0f; // Ships spawn at full health
 
+// Invulnerability duration granted after each non-lethal hit (spec: 1 second)
+constexpr float INVULNERABILITY_DURATION = 1.0f;
+
 class Player
 {
     // Grant Game direct access to private attributes for camera tracking
@@ -90,6 +93,8 @@ private:
     // Health & Death State
     float m_health;   // Current health, clamped between 0 and PLAYER_MAX_HEALTH
     bool  m_isDead;   // True once health reaches zero
+    Vector2 m_spawnPosition; // Original spawn point, restored on respawn
+    float m_invulnerabilityTimer; // Seconds of invulnerability remaining (>0 = protected)
 
     // Ends the active dash and starts the cooldown timer
     void EndDash();
@@ -124,6 +129,10 @@ public:
     // Renders the HUD health bar in screen space (fixed position).
     // Reads m_health internally — no getters needed.
     void DrawHealthBar() const;
+
+    // Resets the player to its spawn state: position, health, rotation
+    // toward the mouse, and clears dash/shooting state. Only valid when dead.
+    void Respawn(const Camera2D& camera);
 
     // ------------------------------------------------------------------------
     // Draw

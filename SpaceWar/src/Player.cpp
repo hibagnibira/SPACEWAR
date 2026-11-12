@@ -46,6 +46,8 @@ Player::Player(Vector2 startPosition, float worldWidth, float worldHeight)
     , m_shotRequested(false)
     , m_health(PLAYER_STARTING_HEALTH)
     , m_isDead(false)
+    , m_spawnPosition(startPosition)
+    , m_invulnerabilityTimer(0.0f)
 {
 }
 
@@ -68,9 +70,11 @@ void Player::EndDash()
 // ----------------------------------------------------------------------------
 void Player::TakeDamage(float damageAmount)
 {
-    if (m_isDead || damageAmount <= 0.0f)
+    // Dead players and invulnerable players ignore all damage.
+    // Ignored hits do NOT restart the invulnerability timer.
+    if (m_isDead || m_invulnerabilityTimer > 0.0f || damageAmount <= 0.0f)
     {
-        return; // Already dead or invalid amount: no state change
+        return;
     }
 
     m_health -= damageAmount;
@@ -84,6 +88,11 @@ void Player::TakeDamage(float damageAmount)
         m_velocity = { 0.0f, 0.0f };
         m_isThrustingForward = false;
         m_isDashing = false;
+    }
+    else
+    {
+        // Survived the hit: grant the invulnerability window
+        m_invulnerabilityTimer = INVULNERABILITY_DURATION;
     }
 }
 
@@ -122,6 +131,45 @@ void Player::DrawHealthBar() const
 }
 
 // ----------------------------------------------------------------------------
+// Respawn
+// Full player-only reset after death. Does not touch bullets, enemies,
+// camera, or world state — those belong to Game.
+// ----------------------------------------------------------------------------
+void Player::Respawn(const Camera2D& camera)
+{
+    // Position & health
+    m_position = m_spawnPosition;
+    m_health = PLAYER_STARTING_HEALTH;
+    m_isDead = false;
+
+    // Movement state
+    m_velocity = { 0.0f, 0.0f };
+    m_isThrustingForward = false;
+
+    // Dash state: cooldown cleared so boost is immediately available
+    m_isDashing = false;
+    m_dashTimer = 0.0f;
+    m_dashCooldownTimer = 0.0f;
+
+    // Shooting state: off until the player toggles it again
+    m_isShooting = false;
+    m_fireTimer = 0.0f;
+    m_shotRequested = false;
+
+    // Invulnerability: immediately vulnerable again after respawn
+    m_invulnerabilityTimer = 0.0f;
+
+    // Immediately face the current mouse world position
+    const Vector2 mouseWorldPos = GetScreenToWorld2D(GetMousePosition(), camera);
+    const float faceX = mouseWorldPos.x - m_position.x;
+    const float faceY = mouseWorldPos.y - m_position.y;
+    if (std::hypot(faceX, faceY) > 0.001f)
+    {
+        m_rotation = std::atan2(faceY, faceX);
+    }
+}
+
+// ----------------------------------------------------------------------------
 // Update
 // Encapsulates all per-frame input handling, physics integration, and bounds.
 // ----------------------------------------------------------------------------
@@ -135,9 +183,20 @@ void Player::DrawHealthBar() const
 // ----------------------------------------------------------------------------
 void Player::Update(float dt, const Camera2D& camera)
 {
+    if (dt <= 0.0f)
+    {
+        return;
+    }
+
+    // Invulnerability countdown runs regardless of dead/alive state
+    if (m_invulnerabilityTimer > 0.0f)
+    {
+        m_invulnerabilityTimer -= dt;
+    }
+
     // Dead players ignore all gameplay input: no movement, dash, or shooting.
     // The ship stays frozen at its final position (Draw still renders it).
-    if (dt <= 0.0f || m_isDead)
+    if (m_isDead)
     {
         return;
     }

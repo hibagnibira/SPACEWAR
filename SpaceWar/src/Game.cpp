@@ -83,6 +83,12 @@ void Game::Update(float dt)
         m_player.TakeDamage(DEBUG_DAMAGE_AMOUNT);
     }
 
+    // Temporary respawn: R only works while the player is dead (single press)
+    if (m_player.m_isDead && IsKeyPressed(KEY_R))
+    {
+        m_player.Respawn(m_camera);
+    }
+
     // 4. Smoothly follow player's new position
     UpdateCamera(dt);
 }
@@ -198,6 +204,10 @@ void Game::Draw()
     DrawText("Left Click - Toggle shooting",   20, 304, 14, GRAY);
     DrawText("Space      - Dash / Boost",      20, 322, 14, GRAY);
     DrawText("F1         - Debug damage (temporary)", 20, 340, 14, GRAY);
+    if (m_player.m_isDead)
+    {
+        DrawText("R         - Respawn (temporary)", 20, 358, 14, YELLOW);
+    }
 
     // GAME OVER overlay — visible only while the player is dead
     if (m_player.m_isDead)
