@@ -30,6 +30,21 @@ constexpr float SHIP_COLLISION_RADIUS = 18.0f;  // Approximate radius used for b
 constexpr float STOP_DISTANCE = 6.0f;   // Distance to the cursor at which the ship comes to a full stop
 constexpr float SLOWING_RADIUS = 180.0f; // Radius at which the ship begins decelerating to eliminate overshoot
 
+// ----------------------------------------------------------------------------
+// Dash / Boost Tuning
+// ----------------------------------------------------------------------------
+constexpr float DASH_DURATION = 1.0f;          // Dash lasts exactly 1 second
+constexpr float DASH_SPEED_MULTIPLIER = 2.0f;  // Dash speed = 2x normal max speed (840 px/s)
+constexpr float DASH_MIN_DIRECTION_DISTANCE = 1.0f; // Min mouse distance to compute dash direction
+
+// PROVISIONAL: cooldown duration has not been finalized yet and will be
+// tuned later. Kept as a single constant so it is easy to adjust.
+constexpr float DASH_COOLDOWN_DURATION = 3.0f;
+
+// Shooting interval between automatic shots while continuous fire is on.
+// ~4 shots per second — medium frequency, tune after testing.
+constexpr float FIRE_INTERVAL = 0.25f;
+
 class Player
 {
     // Grant Game direct access to private attributes for camera tracking
@@ -54,6 +69,20 @@ private:
     // Input & Thruster State (tracked for rendering thruster exhaust)
     bool m_isThrustingForward;
     //remove bool m_isThrustingReverse; because keyboard reverse movement (S key) is removed in favor of automatic mouse tracking, tracking reverse thrust is no longer needed.
+
+    // Dash / Boost State (Space key)
+    bool    m_isDashing;          // True while a dash is currently active
+    Vector2 m_dashDirection;      // Stored dash heading (locked at dash start)
+    float   m_dashTimer;          // Remaining dash time in seconds
+    float   m_dashCooldownTimer;  // Remaining cooldown time in seconds
+
+    // Shooting State (left mouse button toggle)
+    bool  m_isShooting;       // True while continuous fire is toggled on
+    float m_fireTimer;        // Countdown to the next automatic shot
+    bool  m_shotRequested;    // One-frame flag: Game spawns a bullet when set
+
+    // Ends the active dash and starts the cooldown timer
+    void EndDash();
 
 
 public:

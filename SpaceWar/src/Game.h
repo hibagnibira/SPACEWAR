@@ -40,6 +40,7 @@
 #include "Asteroid.h"
 #include "Boss.h"
 #include "AssetManager.h"
+#include "Bullet.h"
 
 enum class GameState
 {
@@ -67,8 +68,22 @@ private:
     Player   m_player; // Game owns the Player instance
     Camera2D m_camera; // Game owns and manages the Camera2D instance
 
+    // Starfield decoration scattered across the world
+    struct Star
+    {
+        Vector2 position;
+        float   radius;
+        unsigned char alpha;
+    };
+    std::vector<Star> m_stars;
+    std::vector<Bullet> m_bullets; // Active player projectiles
+
     // Internal helper to smoothly move camera.target toward m_player.m_position
     void UpdateCamera(float dt);
+
+    // Projectile management
+    void SpawnPlayerBullet();
+    void UpdateBullets(float dt);
 
 public:
     Game(int screenWidth = 1280, int screenHeight = 720);

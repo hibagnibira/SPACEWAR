@@ -6,6 +6,7 @@
 
 #include "Game.h"
 #include <cmath>
+#include <algorithm>
 
 Game::Game(int screenWidth, int screenHeight)
     : m_screenWidth(screenWidth)
@@ -15,6 +16,28 @@ Game::Game(int screenWidth, int screenHeight)
     , m_player({ 1200.0f, 900.0f }, 2400.0f, 1800.0f) // Spawn at center of arena
     , m_camera{ 0 }
 {
+    // Deterministic starfield generation (stable across runs)
+    constexpr int STAR_COUNT = 400;
+    m_stars.reserve(STAR_COUNT);
+
+    unsigned int seed = 1337u;
+    for (int i = 0; i < STAR_COUNT; ++i)
+    {
+        seed = seed * 1664525u + 1013904223u;
+        const float fx = static_cast<float>(seed >> 8) / 16777216.0f;
+
+        seed = seed * 1664525u + 1013904223u;
+        const float fy = static_cast<float>(seed >> 8) / 16777216.0f;
+
+        seed = seed * 1664525u + 1013904223u;
+        const float fr = static_cast<float>(seed >> 8) / 16777216.0f;
+
+        Star star;
+        star.position = { fx * m_worldWidth, fy * m_worldHeight };
+        star.radius = 0.5f + fr * 2.0f;
+        star.alpha = static_cast<unsigned char>(80 + (seed & 0x7Fu));
+        m_stars.push_back(star);
+    }
 }
 
 void Game::Init()
@@ -37,7 +60,17 @@ void Game::Update(float dt)
     // 1. Update player (player reads camera to calculate world-space mouse target)
     m_player.Update(dt, m_camera);
 
-    // 2. Smoothly follow player's new position
+    // 2. Spawn a bullet if the player requested one this frame
+    if (m_player.m_shotRequested)
+    {
+        m_player.m_shotRequested = false;
+        SpawnPlayerBullet();
+    }
+
+    // 3. Update projectiles
+    UpdateBullets(dt);
+
+    // 4. Smoothly follow player's new position
     UpdateCamera(dt);
 }
 
@@ -51,19 +84,63 @@ void Game::UpdateCamera(float dt)
     m_camera.target.y += (m_player.m_position.y - m_camera.target.y) * cameraBlend;
 }
 
+void Game::SpawnPlayerBullet()
+{
+    // Facing direction from the ship's rotation convention:
+    // 0 radians = facing right, nose at +x, rear at -x.
+    const Vector2 facing = { std::cos(m_player.m_rotation), std::sin(m_player.m_rotation) };
+
+    // Spawn at the rear of the ship, offset behind center along -facing.
+    constexpr float REAR_OFFSET = 20.0f;
+    const Vector2 spawnPos = { m_player.m_position.x - facing.x * REAR_OFFSET,
+                               m_player.m_position.y - facing.y * REAR_OFFSET };
+
+    // Shoot backwards (180 degrees from facing) at fixed bullet speed,
+    // plus the player's current velocity captured at this exact moment
+    // (includes dash velocity while boosting).
+    const Vector2 shootDir = { -facing.x, -facing.y };
+    const Vector2 bulletVelocity = { shootDir.x * BULLET_SPEED + m_player.m_velocity.x,
+                                     shootDir.y * BULLET_SPEED + m_player.m_velocity.y };
+
+    m_bullets.emplace_back(spawnPos, bulletVelocity);
+}
+
+void Game::UpdateBullets(float dt)
+{
+    for (Bullet& bullet : m_bullets)
+    {
+        bullet.Update(dt);
+    }
+
+    // Remove expired bullets without invalidating iteration
+    m_bullets.erase(std::remove_if(m_bullets.begin(), m_bullets.end(),
+        [](const Bullet& bullet) { return bullet.IsExpired(); }),
+        m_bullets.end());
+}
+
 void Game::Draw()
 {
     BeginDrawing();
-    ClearBackground(Color{ 8, 10, 18, 255 });
+
+    // Blue space gradient backdrop (screen space, covers entire window)
+    DrawRectangleGradientV(0, 0, m_screenWidth, m_screenHeight,
+        Color{ 10, 25, 70, 255 },   // deep space blue at top
+        Color{ 25, 70, 140, 255 }); // brighter horizon blue at bottom
 
     // --------------------------------------------------------------------
     // 1. World Space (Inside Camera2D Transformation)
     // --------------------------------------------------------------------
     BeginMode2D(m_camera);
 
+    // Starfield
+    for (const Star& star : m_stars)
+    {
+        DrawCircleV(star.position, star.radius, Color{ 190, 215, 255, star.alpha });
+    }
+
     // World background grid
     constexpr int gridSize = 80;
-    const Color gridColor = Color{ 25, 30, 45, 255 };
+    const Color gridColor = Color{ 45, 90, 150, 255 };
 
     for (int x = 0; x <= static_cast<int>(m_worldWidth); x += gridSize)
     {
@@ -84,6 +161,12 @@ void Game::Draw()
 
     // Spaceship
     m_player.Draw();
+
+    // Player projectiles
+    for (const Bullet& bullet : m_bullets)
+    {
+        bullet.Draw();
+    }
 
     EndMode2D();
 

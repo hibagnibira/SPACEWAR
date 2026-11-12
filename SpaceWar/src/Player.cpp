@@ -37,7 +37,26 @@ Player::Player(Vector2 startPosition, float worldWidth, float worldHeight)
     , m_worldWidth(worldWidth)
     , m_worldHeight(worldHeight)
     , m_isThrustingForward(false)
+    , m_isDashing(false)
+    , m_dashDirection{ 0.0f, 0.0f }
+    , m_dashTimer(0.0f)
+    , m_dashCooldownTimer(0.0f)
+    , m_isShooting(false)
+    , m_fireTimer(0.0f)
+    , m_shotRequested(false)
 {
+}
+
+// ----------------------------------------------------------------------------
+// EndDash
+// Terminates the active dash (timer expiry or boundary hit) and begins the
+// cooldown period during which another dash cannot be triggered.
+// ----------------------------------------------------------------------------
+void Player::EndDash()
+{
+    m_isDashing = false;
+    m_dashTimer = 0.0f;
+    m_dashCooldownTimer = DASH_COOLDOWN_DURATION;
 }
 
 // ----------------------------------------------------------------------------
@@ -70,9 +89,56 @@ void Player::Update(float dt, const Camera2D& camera)
     const float dist = std::hypot(diffX, diffY);
 
     // ------------------------------------------------------------------------
-    // 2. Option A Movement (Direct Velocity, Zero Inertia/Drag)
+    // 2. Dash Input & Timers (Space = single press to activate)
     // ------------------------------------------------------------------------
-    if (dist <= STOP_DISTANCE)
+    if (IsKeyPressed(KEY_SPACE) && !m_isDashing && m_dashCooldownTimer <= 0.0f)
+    {
+        m_isDashing = true;
+        m_dashTimer = DASH_DURATION;
+
+        // Lock the dash heading at activation time. If the mouse is too
+        // close to compute a direction, fall back to current facing.
+        if (dist > DASH_MIN_DIRECTION_DISTANCE)
+        {
+            m_dashDirection = { diffX / dist, diffY / dist };
+        }
+        else
+        {
+            m_dashDirection = { std::cos(m_rotation), std::sin(m_rotation) };
+        }
+    }
+
+    if (m_isDashing)
+    {
+        m_dashTimer -= dt;
+        if (m_dashTimer <= 0.0f)
+        {
+            EndDash(); // Dash finished -> cooldown begins
+        }
+    }
+
+    if (m_dashCooldownTimer > 0.0f)
+    {
+        m_dashCooldownTimer -= dt;
+    }
+
+    // ------------------------------------------------------------------------
+    // 3. Movement (Dash overrides Option A while active)
+    // ------------------------------------------------------------------------
+    if (m_isDashing)
+    {
+        // Spaceship still faces the mouse, but dash travel uses the stored
+        // direction so it moves in a straight line.
+        if (dist > STOP_DISTANCE)
+        {
+            m_rotation = std::atan2(diffY, diffX);
+        }
+
+        m_velocity.x = m_dashDirection.x * m_maxSpeed * DASH_SPEED_MULTIPLIER;
+        m_velocity.y = m_dashDirection.y * m_maxSpeed * DASH_SPEED_MULTIPLIER;
+        m_isThrustingForward = true;
+    }
+    else if (dist <= STOP_DISTANCE)
     {
         m_velocity = { 0.0f, 0.0f };
         m_isThrustingForward = false;
@@ -95,24 +161,35 @@ void Player::Update(float dt, const Camera2D& camera)
     }
 
     // ------------------------------------------------------------------------
-    // 3. Position Integration & Arrival Step Clamping
+    // 4. Position Integration & Arrival Step Clamping
     // ------------------------------------------------------------------------
-    const float stepDist = std::hypot(m_velocity.x * dt, m_velocity.y * dt);
-    if (stepDist >= dist && dist > 0.0f)
+    if (m_isDashing)
     {
-        m_position = mouseWorldPos;
-        m_velocity = { 0.0f, 0.0f };
-        m_isThrustingForward = false;
-    }
-    else
-    {
+        // Dash ignores the cursor: always travels its full step.
         m_position.x += m_velocity.x * dt;
         m_position.y += m_velocity.y * dt;
     }
+    else
+    {
+        const float stepDist = std::hypot(m_velocity.x * dt, m_velocity.y * dt);
+        if (stepDist >= dist && dist > 0.0f)
+        {
+            m_position = mouseWorldPos;
+            m_velocity = { 0.0f, 0.0f };
+            m_isThrustingForward = false;
+        }
+        else
+        {
+            m_position.x += m_velocity.x * dt;
+            m_position.y += m_velocity.y * dt;
+        }
+    }
 
     // ------------------------------------------------------------------------
-    // 4. World Boundary Enforcement
+    // 5. World Boundary Enforcement
     // ------------------------------------------------------------------------
+    const Vector2 preClampPosition = m_position;
+
     if (m_position.x < SHIP_COLLISION_RADIUS)
     {
         m_position.x = SHIP_COLLISION_RADIUS;
@@ -135,7 +212,35 @@ void Player::Update(float dt, const Camera2D& camera)
         m_velocity.y = 0.0f;
     }
 
-   
+    // If the boundary clamp moved the ship during a dash, the dash is cut
+    // short immediately and the cooldown starts.
+    if (m_isDashing &&
+        (m_position.x != preClampPosition.x || m_position.y != preClampPosition.y))
+    {
+        EndDash();
+    }
+
+    // ------------------------------------------------------------------------
+    // 6. Shooting (Left Mouse Button Toggle)
+    // ------------------------------------------------------------------------
+    if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT))
+    {
+        m_isShooting = !m_isShooting;
+    }
+
+    if (m_isShooting)
+    {
+        m_fireTimer -= dt;
+        if (m_fireTimer <= 0.0f)
+        {
+            m_fireTimer = FIRE_INTERVAL;
+            m_shotRequested = true; // Game reads this flag (friend) and spawns the bullet
+        }
+    }
+    else
+    {
+        m_fireTimer = 0.0f; // Reset so re-activating fires immediately
+    }
 }
 // ----------------------------------------------------------------------------
 // Draw
