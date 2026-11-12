@@ -31,15 +31,17 @@ constexpr float STOP_DISTANCE = 6.0f;   // Distance to the cursor at which the s
 constexpr float SLOWING_RADIUS = 180.0f; // Radius at which the ship begins decelerating to eliminate overshoot
 
 // ----------------------------------------------------------------------------
-// Dash / Boost Tuning
+// Acceleration / Energy Tuning (replaces Dash/Boost)
 // ----------------------------------------------------------------------------
-constexpr float DASH_DURATION = 1.0f;          // Dash lasts exactly 1 second
-constexpr float DASH_SPEED_MULTIPLIER = 2.0f;  // Dash speed = 2x normal max speed (840 px/s)
-constexpr float DASH_MIN_DIRECTION_DISTANCE = 1.0f; // Min mouse distance to compute dash direction
+constexpr float ACCEL_MAX_SPEED = 840.0f;        // Accelerated top speed (2x normal)
+constexpr float ACCELERATION_RATE = 600.0f;      // px/s^2 — ramp speed up/down
+constexpr float ENERGY_MAX = 100.0f;             // Energy bar scale (percent)
+constexpr float ENERGY_CONSUMPTION_RATE = 25.0f; // %/s drained while accelerating
+constexpr float ENERGY_RECHARGE_RATE = 12.5f;    // %/s recharged while inactive
 
-// PROVISIONAL: cooldown duration has not been finalized yet and will be
-// tuned later. Kept as a single constant so it is easy to adjust.
-constexpr float DASH_COOLDOWN_DURATION = 3.0f;
+// Double-click detection window: two LMB presses within this many seconds
+// count as a double-click (acceleration) instead of two single clicks.
+constexpr double DOUBLE_CLICK_WINDOW = 0.3;
 
 // Shooting interval between automatic shots while continuous fire is on.
 // ~4 shots per second — medium frequency, tune after testing.
@@ -79,11 +81,15 @@ private:
     bool m_isThrustingForward;
     //remove bool m_isThrustingReverse; because keyboard reverse movement (S key) is removed in favor of automatic mouse tracking, tracking reverse thrust is no longer needed.
 
-    // Dash / Boost State (Space key)
-    bool    m_isDashing;          // True while a dash is currently active
-    Vector2 m_dashDirection;      // Stored dash heading (locked at dash start)
-    float   m_dashTimer;          // Remaining dash time in seconds
-    float   m_dashCooldownTimer;  // Remaining cooldown time in seconds
+    // Acceleration / Energy State (Space key)
+    float m_energy;          // 0-ENERGY_MAX; full bar required to activate
+    bool  m_isAccelerating;  // True while energy is being consumed
+    float m_speedCap;        // Current speed ceiling, ramps toward target
+    bool  m_isAgainstBoundary; // True on frames where a wall blocked movement
+
+    // Mouse click disambiguation state
+    double m_lastClickTime;          // GetTime() of last LMB press (-1 = none pending)
+    bool   m_shootingTogglePending;  // First click waiting to see if a 2nd follows
 
     // Shooting State (left mouse button toggle)
     bool  m_isShooting;       // True while continuous fire is toggled on
@@ -95,10 +101,6 @@ private:
     bool  m_isDead;   // True once health reaches zero
     Vector2 m_spawnPosition; // Original spawn point, restored on respawn
     float m_invulnerabilityTimer; // Seconds of invulnerability remaining (>0 = protected)
-
-    // Ends the active dash and starts the cooldown timer
-    void EndDash();
-
 
 public:
     // ------------------------------------------------------------------------
@@ -134,8 +136,11 @@ public:
     // Reads m_health internally — no getters needed.
     void DrawHealthBar() const;
 
+    // Renders the HUD acceleration energy bar in screen space (fixed position).
+    void DrawEnergyBar() const;
+
     // Resets the player to its spawn state: position, health, rotation
-    // toward the mouse, and clears dash/shooting state. Only valid when dead.
+    // toward the mouse, and clears acceleration/shooting state. Only valid when dead.
     void Respawn(const Camera2D& camera);
 
     // ------------------------------------------------------------------------

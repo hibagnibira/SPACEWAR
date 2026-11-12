@@ -131,7 +131,7 @@ void Game::SpawnPlayerBullet()
 
     // Shoot backwards (180 degrees from facing) at fixed bullet speed,
     // plus the player's current velocity captured at this exact moment
-    // (includes dash velocity while boosting).
+    // (includes acceleration velocity while boosting).
     const Vector2 shootDir = { -facing.x, -facing.y };
     const Vector2 bulletVelocity = { shootDir.x * BULLET_SPEED + m_player.m_velocity.x,
                                      shootDir.y * BULLET_SPEED + m_player.m_velocity.y };
@@ -331,16 +331,18 @@ void Game::Draw()
 
     // HUD: player health bar (fixed screen position, drawn by Player)
     m_player.DrawHealthBar();
+    m_player.DrawEnergyBar();
 
     // HUD: controls guide (update this list when bindings change)
     DrawText("CONTROLS", 20, 260, 18, RAYWHITE);
-    DrawText("Mouse      - Move & aim",        20, 286, 14, GRAY);
-    DrawText("Left Click - Toggle shooting",   20, 304, 14, GRAY);
-    DrawText("Space      - Dash / Boost",      20, 322, 14, GRAY);
-    DrawText("F1         - Debug damage (temporary)", 20, 340, 14, GRAY);
+    DrawText("Mouse             - Move & aim",               20, 286, 14, GRAY);
+    DrawText("Left Click        - Toggle Shooting",          20, 304, 14, GRAY);
+    DrawText("Left Double-Click - Activate Acceleration",    20, 322, 14, GRAY);
+    DrawText("Space             - Accelerate (energy)",      20, 340, 14, GRAY);
+    DrawText("F1                - Debug damage (temporary)",20, 358, 14, GRAY);
     if (m_player.m_isDead)
     {
-        DrawText("R         - Respawn (temporary)", 20, 358, 14, YELLOW);
+        DrawText("R                - Respawn (temporary)",   20, 376, 14, YELLOW);
     }
 
     // GAME OVER overlay — visible only while the player is dead

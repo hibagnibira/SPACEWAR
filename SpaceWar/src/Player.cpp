@@ -5,6 +5,7 @@
 //              and rendering logic are entirely self-contained.
 // ============================================================================
 #include "Player.h"
+#include <algorithm>
 #include <cmath>
 
 // ----------------------------------------------------------------------------
@@ -37,10 +38,12 @@ Player::Player(Vector2 startPosition, float worldWidth, float worldHeight)
     , m_worldWidth(worldWidth)
     , m_worldHeight(worldHeight)
     , m_isThrustingForward(false)
-    , m_isDashing(false)
-    , m_dashDirection{ 0.0f, 0.0f }
-    , m_dashTimer(0.0f)
-    , m_dashCooldownTimer(0.0f)
+    , m_energy(0.0f)              // starts empty -> auto-recharges
+    , m_isAccelerating(false)
+    , m_speedCap(DEFAULT_MAX_SPEED)
+    , m_isAgainstBoundary(false)
+    , m_lastClickTime(-1.0)
+    , m_shootingTogglePending(false)
     , m_isShooting(false)
     , m_fireTimer(0.0f)
     , m_shotRequested(false)
@@ -49,18 +52,6 @@ Player::Player(Vector2 startPosition, float worldWidth, float worldHeight)
     , m_spawnPosition(startPosition)
     , m_invulnerabilityTimer(0.0f)
 {
-}
-
-// ----------------------------------------------------------------------------
-// EndDash
-// Terminates the active dash (timer expiry or boundary hit) and begins the
-// cooldown period during which another dash cannot be triggered.
-// ----------------------------------------------------------------------------
-void Player::EndDash()
-{
-    m_isDashing = false;
-    m_dashTimer = 0.0f;
-    m_dashCooldownTimer = DASH_COOLDOWN_DURATION;
 }
 
 // ----------------------------------------------------------------------------
@@ -84,10 +75,10 @@ void Player::TakeDamage(float damageAmount)
         m_health = 0.0f;
         m_isDead = true;
 
-        // Death cleanup: stop all motion and cancel any active dash
+        // Death cleanup: stop all motion and cancel any active acceleration
         m_velocity = { 0.0f, 0.0f };
         m_isThrustingForward = false;
-        m_isDashing = false;
+        m_isAccelerating = false;
     }
     else
     {
@@ -150,6 +141,46 @@ void Player::DrawHealthBar() const
 }
 
 // ----------------------------------------------------------------------------
+// DrawEnergyBar
+// Screen-space HUD element for the acceleration energy meter.
+// Fixed position below the health bar; never moves with the camera.
+// ----------------------------------------------------------------------------
+void Player::DrawEnergyBar() const
+{
+    constexpr int BAR_X = 20;
+    constexpr int BAR_Y = 78;   // below the health bar
+    constexpr int BAR_WIDTH = 220;
+    constexpr int BAR_HEIGHT = 16;
+
+    const float fraction = m_energy / ENERGY_MAX; // always in [0,1]
+
+    // Empty portion background + border
+    DrawRectangle(BAR_X, BAR_Y, BAR_WIDTH, BAR_HEIGHT, Color{ 35, 40, 55, 255 });
+    DrawRectangleLines(BAR_X, BAR_Y, BAR_WIDTH, BAR_HEIGHT, Color{ 90, 100, 130, 255 });
+
+    const int fillWidth = static_cast<int>(BAR_WIDTH * fraction);
+
+    // Color communicates state: blue = charging, orange = boosting,
+    // green = ready to activate
+    Color fillColor = Color{ 80, 140, 240, 255 };
+    if (m_isAccelerating)            fillColor = Color{ 255, 160, 60, 255 };
+    else if (m_energy >= ENERGY_MAX) fillColor = Color{ 80, 220, 100, 255 };
+
+    if (fillWidth > 0)
+    {
+        DrawRectangle(BAR_X, BAR_Y, fillWidth, BAR_HEIGHT, fillColor);
+    }
+
+    // Percentage + READY hint when the bar is full
+    DrawText(TextFormat("%d%%", static_cast<int>(m_energy)),
+             BAR_X + BAR_WIDTH + 10, BAR_Y - 2, 16, RAYWHITE);
+    if (m_energy >= ENERGY_MAX)
+    {
+        DrawText("READY [Space]", BAR_X, BAR_Y + BAR_HEIGHT + 4, 12, GREEN);
+    }
+}
+
+// ----------------------------------------------------------------------------
 // Respawn
 // Full player-only reset after death. Does not touch bullets, enemies,
 // camera, or world state — those belong to Game.
@@ -165,10 +196,15 @@ void Player::Respawn(const Camera2D& camera)
     m_velocity = { 0.0f, 0.0f };
     m_isThrustingForward = false;
 
-    // Dash state: cooldown cleared so boost is immediately available
-    m_isDashing = false;
-    m_dashTimer = 0.0f;
-    m_dashCooldownTimer = 0.0f;
+    // Acceleration state: energy restarts empty, speed cap back to normal
+    m_isAccelerating = false;
+    m_energy = 0.0f;
+    m_speedCap = m_maxSpeed;
+    m_isAgainstBoundary = false;
+
+    // Mouse click state: no pending toggles after respawn
+    m_lastClickTime = -1.0;
+    m_shootingTogglePending = false;
 
     // Shooting state: off until the player toggles it again
     m_isShooting = false;
@@ -213,7 +249,7 @@ void Player::Update(float dt, const Camera2D& camera)
         m_invulnerabilityTimer -= dt;
     }
 
-    // Dead players ignore all gameplay input: no movement, dash, or shooting.
+    // Dead players ignore all gameplay input: no movement, acceleration, or shooting.
     // The ship stays frozen at its final position (Draw still renders it).
     if (m_isDead)
     {
@@ -231,56 +267,55 @@ void Player::Update(float dt, const Camera2D& camera)
     const float dist = std::hypot(diffX, diffY);
 
     // ------------------------------------------------------------------------
-    // 2. Dash Input & Timers (Space = single press to activate)
+    // 2. Acceleration Energy & Activation (Space = single press)
     // ------------------------------------------------------------------------
-    if (IsKeyPressed(KEY_SPACE) && !m_isDashing && m_dashCooldownTimer <= 0.0f)
+    // Space only activates when the energy bar is completely full.
+    // Once active it runs until energy hits 0 — no holding required.
+    if (IsKeyPressed(KEY_SPACE) && !m_isAccelerating && m_energy >= ENERGY_MAX)
     {
-        m_isDashing = true;
-        m_dashTimer = DASH_DURATION;
+        m_isAccelerating = true;
+    }
 
-        // Lock the dash heading at activation time. If the mouse is too
-        // close to compute a direction, fall back to current facing.
-        if (dist > DASH_MIN_DIRECTION_DISTANCE)
+    if (m_isAccelerating)
+    {
+        // Energy drain pauses while the ship is pinned against a wall —
+        // acceleration state and speed progression continue unchanged.
+        if (!m_isAgainstBoundary)
         {
-            m_dashDirection = { diffX / dist, diffY / dist };
+            m_energy -= ENERGY_CONSUMPTION_RATE * dt;
         }
-        else
+        if (m_energy <= 0.0f)
         {
-            m_dashDirection = { std::cos(m_rotation), std::sin(m_rotation) };
+            m_energy = 0.0f;
+            m_isAccelerating = false;
+        }
+    }
+    else
+    {
+        m_energy += ENERGY_RECHARGE_RATE * dt;
+        if (m_energy > ENERGY_MAX)
+        {
+            m_energy = ENERGY_MAX;
         }
     }
 
-    if (m_isDashing)
+    // Ramp the speed ceiling toward its target — gradual, frame-rate
+    // independent, and symmetric for spin-up and spin-down.
+    const float targetSpeedCap = m_isAccelerating ? ACCEL_MAX_SPEED : m_maxSpeed;
+    const float rampStep = ACCELERATION_RATE * dt;
+    if (m_speedCap < targetSpeedCap)
     {
-        m_dashTimer -= dt;
-        if (m_dashTimer <= 0.0f)
-        {
-            EndDash(); // Dash finished -> cooldown begins
-        }
+        m_speedCap = std::min(m_speedCap + rampStep, targetSpeedCap);
     }
-
-    if (m_dashCooldownTimer > 0.0f)
+    else
     {
-        m_dashCooldownTimer -= dt;
+        m_speedCap = std::max(m_speedCap - rampStep, targetSpeedCap);
     }
 
     // ------------------------------------------------------------------------
-    // 3. Movement (Dash overrides Option A while active)
+    // 3. Option A Movement (Direct Velocity, Zero Inertia/Drag)
     // ------------------------------------------------------------------------
-    if (m_isDashing)
-    {
-        // Spaceship still faces the mouse, but dash travel uses the stored
-        // direction so it moves in a straight line.
-        if (dist > STOP_DISTANCE)
-        {
-            m_rotation = std::atan2(diffY, diffX);
-        }
-
-        m_velocity.x = m_dashDirection.x * m_maxSpeed * DASH_SPEED_MULTIPLIER;
-        m_velocity.y = m_dashDirection.y * m_maxSpeed * DASH_SPEED_MULTIPLIER;
-        m_isThrustingForward = true;
-    }
-    else if (dist <= STOP_DISTANCE)
+    if (dist <= STOP_DISTANCE)
     {
         m_velocity = { 0.0f, 0.0f };
         m_isThrustingForward = false;
@@ -289,11 +324,11 @@ void Player::Update(float dt, const Camera2D& camera)
     {
         m_rotation = std::atan2(diffY, diffX);
 
-        // Smooth speed ramp-down inside the slowing radius (capped at 420 px/s)
-        float currentSpeed = m_maxSpeed;
+        // Smooth speed ramp-down inside the slowing radius, capped by m_speedCap
+        float currentSpeed = m_speedCap;
         if (dist < SLOWING_RADIUS)
         {
-            currentSpeed = m_maxSpeed * (dist / SLOWING_RADIUS);
+            currentSpeed = m_speedCap * (dist / SLOWING_RADIUS);
         }
 
         m_velocity.x = (diffX / dist) * currentSpeed;
@@ -305,26 +340,17 @@ void Player::Update(float dt, const Camera2D& camera)
     // ------------------------------------------------------------------------
     // 4. Position Integration & Arrival Step Clamping
     // ------------------------------------------------------------------------
-    if (m_isDashing)
+    const float stepDist = std::hypot(m_velocity.x * dt, m_velocity.y * dt);
+    if (stepDist >= dist && dist > 0.0f)
     {
-        // Dash ignores the cursor: always travels its full step.
-        m_position.x += m_velocity.x * dt;
-        m_position.y += m_velocity.y * dt;
+        m_position = mouseWorldPos;
+        m_velocity = { 0.0f, 0.0f };
+        m_isThrustingForward = false;
     }
     else
     {
-        const float stepDist = std::hypot(m_velocity.x * dt, m_velocity.y * dt);
-        if (stepDist >= dist && dist > 0.0f)
-        {
-            m_position = mouseWorldPos;
-            m_velocity = { 0.0f, 0.0f };
-            m_isThrustingForward = false;
-        }
-        else
-        {
-            m_position.x += m_velocity.x * dt;
-            m_position.y += m_velocity.y * dt;
-        }
+        m_position.x += m_velocity.x * dt;
+        m_position.y += m_velocity.y * dt;
     }
 
     // ------------------------------------------------------------------------
@@ -354,20 +380,48 @@ void Player::Update(float dt, const Camera2D& camera)
         m_velocity.y = 0.0f;
     }
 
-    // If the boundary clamp moved the ship during a dash, the dash is cut
-    // short immediately and the cooldown starts.
-    if (m_isDashing &&
-        (m_position.x != preClampPosition.x || m_position.y != preClampPosition.y))
-    {
-        EndDash();
-    }
+    // True only when the clamp actually stopped this frame's movement,
+    // i.e. the ship is pressing into a wall (not merely sliding along it)
+    m_isAgainstBoundary = (m_position.x != preClampPosition.x ||
+                           m_position.y != preClampPosition.y);
 
     // ------------------------------------------------------------------------
-    // 6. Shooting (Left Mouse Button Toggle)
+    // 6. Mouse Click Handling (single = shooting, double = acceleration)
     // ------------------------------------------------------------------------
+    // A lone click can't toggle shooting immediately: we must wait to see
+    // whether a second click arrives within DOUBLE_CLICK_WINDOW.
+    const double now = GetTime();
+
     if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT))
     {
+        if (m_lastClickTime >= 0.0 && (now - m_lastClickTime) <= DOUBLE_CLICK_WINDOW)
+        {
+            // Second click inside the window -> double-click gesture.
+            // Consume it for acceleration and cancel the pending shot toggle
+            // so the first click does NOT toggle shooting.
+            m_shootingTogglePending = false;
+            m_lastClickTime = -1.0;
+
+            // Same activation rule as Space: full energy, not already active
+            if (!m_isAccelerating && m_energy >= ENERGY_MAX)
+            {
+                m_isAccelerating = true;
+            }
+        }
+        else
+        {
+            // First click of a potential pair: hold the shooting toggle
+            m_lastClickTime = now;
+            m_shootingTogglePending = true;
+        }
+    }
+
+    // Window expired with no second click -> it was a genuine single click
+    if (m_shootingTogglePending && (now - m_lastClickTime) > DOUBLE_CLICK_WINDOW)
+    {
         m_isShooting = !m_isShooting;
+        m_shootingTogglePending = false;
+        m_lastClickTime = -1.0;
     }
 
     if (m_isShooting)
