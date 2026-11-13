@@ -124,15 +124,18 @@ void Game::SpawnPlayerBullet()
     // 0 radians = facing right, nose at +x, rear at -x.
     const Vector2 facing = { std::cos(m_player.m_rotation), std::sin(m_player.m_rotation) };
 
-    // Spawn at the rear of the ship, offset behind center along -facing.
-    constexpr float REAR_OFFSET = 20.0f;
-    const Vector2 spawnPos = { m_player.m_position.x - facing.x * REAR_OFFSET,
-                               m_player.m_position.y - facing.y * REAR_OFFSET };
+    // Back mode: spawn at rear, fire opposite facing.
+    // Front mode: spawn at nose, fire along facing.
+    const bool frontMode = m_player.m_frontShooting;
+    const float spawnOffset = frontMode ? 24.0f : 20.0f; // nose vs rear offset
+    const float dirSign = frontMode ? 1.0f : -1.0f;
 
-    // Shoot backwards (180 degrees from facing) at fixed bullet speed,
-    // plus the player's current velocity captured at this exact moment
+    const Vector2 spawnPos = { m_player.m_position.x + facing.x * dirSign * spawnOffset,
+                               m_player.m_position.y + facing.y * dirSign * spawnOffset };
+
+    // Shooting velocity + player's current velocity captured at this moment
     // (includes acceleration velocity while boosting).
-    const Vector2 shootDir = { -facing.x, -facing.y };
+    const Vector2 shootDir = { facing.x * dirSign, facing.y * dirSign };
     const Vector2 bulletVelocity = { shootDir.x * BULLET_SPEED + m_player.m_velocity.x,
                                      shootDir.y * BULLET_SPEED + m_player.m_velocity.y };
 
@@ -333,16 +336,21 @@ void Game::Draw()
     m_player.DrawHealthBar();
     m_player.DrawEnergyBar();
 
+    // HUD: current shooting mode (screen space, updates instantly on S)
+    DrawText(TextFormat("SHOOTING MODE: %s", m_player.m_frontShooting ? "FRONT" : "BACK"),
+             20, 116, 16, m_player.m_frontShooting ? YELLOW : LIGHTGRAY);
+
     // HUD: controls guide (update this list when bindings change)
     DrawText("CONTROLS", 20, 260, 18, RAYWHITE);
     DrawText("Mouse             - Move & aim",               20, 286, 14, GRAY);
     DrawText("Left Click        - Toggle Shooting",          20, 304, 14, GRAY);
     DrawText("Left Double-Click - Activate Acceleration",    20, 322, 14, GRAY);
     DrawText("Space             - Accelerate (energy)",      20, 340, 14, GRAY);
-    DrawText("F1                - Debug damage (temporary)",20, 358, 14, GRAY);
+    DrawText("S                 - Switch Shooting Mode",     20, 358, 14, GRAY);
+    DrawText("F1                - Debug damage (temporary)",20, 376, 14, GRAY);
     if (m_player.m_isDead)
     {
-        DrawText("R                - Respawn (temporary)",   20, 376, 14, YELLOW);
+        DrawText("R                - Respawn (temporary)",   20, 394, 14, YELLOW);
     }
 
     // GAME OVER overlay — visible only while the player is dead

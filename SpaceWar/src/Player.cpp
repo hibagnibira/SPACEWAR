@@ -47,6 +47,7 @@ Player::Player(Vector2 startPosition, float worldWidth, float worldHeight)
     , m_isShooting(false)
     , m_fireTimer(0.0f)
     , m_shotRequested(false)
+    , m_frontShooting(false)   // default: Back Shooting
     , m_health(PLAYER_STARTING_HEALTH)
     , m_isDead(false)
     , m_spawnPosition(startPosition)
@@ -210,6 +211,9 @@ void Player::Respawn(const Camera2D& camera)
     m_isShooting = false;
     m_fireTimer = 0.0f;
     m_shotRequested = false;
+
+    // Shooting mode resets to Back; continuous fire stays off
+    m_frontShooting = false;
 
     // Invulnerability: immediately vulnerable again after respawn
     m_invulnerabilityTimer = 0.0f;
@@ -422,6 +426,12 @@ void Player::Update(float dt, const Camera2D& camera)
         m_isShooting = !m_isShooting;
         m_shootingTogglePending = false;
         m_lastClickTime = -1.0;
+    }
+
+    // S key: switch shooting mode once per press (does not affect firing state)
+    if (IsKeyPressed(KEY_S))
+    {
+        m_frontShooting = !m_frontShooting;
     }
 
     if (m_isShooting)

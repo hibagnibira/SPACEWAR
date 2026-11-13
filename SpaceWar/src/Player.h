@@ -95,6 +95,7 @@ private:
     bool  m_isShooting;       // True while continuous fire is toggled on
     float m_fireTimer;        // Countdown to the next automatic shot
     bool  m_shotRequested;    // One-frame flag: Game spawns a bullet when set
+    bool  m_frontShooting;    // false = Back mode (default), true = Front mode
 
     // Health & Death State
     float m_health;   // Current health, clamped between 0 and PLAYER_MAX_HEALTH
