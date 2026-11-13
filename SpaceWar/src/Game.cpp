@@ -34,6 +34,7 @@ Game::Game(int screenWidth, int screenHeight)
     , m_player({ 1200.0f, 900.0f }, 2400.0f, 1800.0f) // Spawn at center of arena
     , m_camera{ 0 }
     , m_stoneSpawnTimer(0.0f)
+    , m_testEnemy({ 1300.0f, 620.0f })  // just above initial view, inside world
 {
     // Deterministic starfield generation (stable across runs)
     constexpr int STAR_COUNT = 400;
@@ -91,6 +92,10 @@ void Game::Update(float dt)
 
     // 3b. Update healing stones (spawn timer, lifetime, collection)
     UpdateHealingStones(dt);
+
+    // 3c. Update test enemy (wander -> chase; Game supplies player state via friendship)
+    m_testEnemy.Update(dt, m_player.m_position, m_camera, m_worldWidth, m_worldHeight,
+                       m_player.m_isAccelerating, m_player.m_isDead);
 
     // Temporary debug damage (single press per hit, not per frame)
     if (IsKeyPressed(DEBUG_DAMAGE_KEY))
@@ -323,6 +328,9 @@ void Game::Draw()
     {
         stone.Draw();
     }
+
+    // Test enemy (world space — moves correctly with the camera)
+    m_testEnemy.Draw();
 
     EndMode2D();
 

@@ -18,12 +18,12 @@ raylib game library, inside Visual Studio 2022 (MSVC, x64, Debug/Release).
 Gameplay concept: the player pilots a spaceship through a large bounded
 arena (world size 2400 x 1800 world units), fights enemies, collects
 healing stones, and survives for as long as possible. The game is still in
-early development — only the Player-side systems described here exist so
+early development only the Player-side systems described here exist so
 far. Enemy, Asteroid, and Boss classes exist as header stubs but are not
 yet wired into gameplay.
 
 Role of the Player system: everything the player directly controls or
-experiences — movement, camera-relative aiming, energy-based acceleration,
+experiences  movement, camera-relative aiming, energy-based acceleration,
 shooting, health, damage, invulnerability, death, respawn, healing, and the
 player-facing HUD.
 
@@ -127,7 +127,7 @@ activation is the mouse click path described above).
 4. MOVEMENT SYSTEM — "OPTION A" (mouse-follow)
 --------------------------------------------------------------------------------
 
-This is controlled, direct-velocity movement — deliberately NOT physics.
+This is controlled, direct-velocity movement deliberately NOT physics.
 
 Behavior:
 - The ship automatically steers toward the world position under the mouse
@@ -163,10 +163,10 @@ frame-rate independent: 60 fps and 144 fps produce identical travel.
 
 Movement parameters (Player.h / constants):
 - DEFAULT_MAX_SPEED (m_maxSpeed): 420 px/s — normal speed ceiling.
-- ACCEL_MAX_SPEED: 840 px/s — ceiling while accelerating.
+- ACCEL_MAX_SPEED: 840 px/s  ceiling while accelerating.
 - STOP_DISTANCE: 6 px.
 - SLOWING_RADIUS: 180 px.
-- SHIP_COLLISION_RADIUS: 18 px — boundary margin.
+- SHIP_COLLISION_RADIUS: 18 px  boundary margin.
 - m_speedCap: dynamic ceiling, ramps between 420 and 840 (see section 6).
 
 Explicitly NOT used (removed earlier in development):
@@ -174,7 +174,7 @@ Explicitly NOT used (removed earlier in development):
 - Physics acceleration/momentum/inertia.
 - Natural drag.
 The "acceleration" in section 6 is a speed-ceiling mechanic layered on top
-of this same direct-velocity movement — it is not physics-based movement.
+of this same direct-velocity movement  it is not physics-based movement.
 
 World boundaries:
 - The playable area is m_worldWidth x m_worldHeight (2400 x 1800).
@@ -193,7 +193,7 @@ World boundaries:
 5. CAMERA SYSTEM
 --------------------------------------------------------------------------------
 
-The camera is a raylib Camera2D owned and managed by Game — there is no
+The camera is a raylib Camera2D owned and managed by Game there is no
 separate camera class.
 
 Configuration (Game::Init):
@@ -261,7 +261,7 @@ Speed behavior:
   symmetric ramp-up and ramp-down. This is what makes speed change
   gradually instead of instantly.
 - Option A movement uses m_speedCap wherever it previously used the fixed
-  max speed, including inside the SLOWING_RADIUS arrival ramp — so the
+  max speed, including inside the SLOWING_RADIUS arrival ramp so the
   ship still arrives gently at the cursor at any speed.
 
 Net effect: ~0.7 s to spin up from 420 to 840, ~4 s of boost from a full
@@ -622,8 +622,7 @@ Project-defined methods (the real API surface):
 | Stone spawn recheck (hp>50%)     | 1.0        | s           | Game.cpp |
 | Stone interval 31–50% / <=30%    | 5.0 / 3.0  | s           | Game.cpp |
 
-Discrepancies vs. earlier decisions: none found between this table and the
-source — all values verified in code.
+
 
 --------------------------------------------------------------------------------
 18. DEVELOPMENT DECISIONS — QUESTIONS AND FINAL ANSWERS
@@ -878,7 +877,7 @@ source code during this documentation pass.
 20. DEFERRED AND FUTURE FEATURES
 --------------------------------------------------------------------------------
 
-Preserved from the original prototype — NONE are implemented:
+Preserved from the original prototype NONE are implemented:
 
 - Lives system (3 shared campaign lives planned).
 - Level restart / campaign progression (5-level campaign planned).

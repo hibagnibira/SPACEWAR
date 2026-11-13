@@ -80,6 +80,7 @@ private:
     std::vector<Bullet> m_bullets; // Active player projectiles
     std::vector<HealingStone> m_healingStones; // Active healing pickups
     float m_stoneSpawnTimer;                   // Countdown to next spawn attempt
+    Enemy m_testEnemy; // Milestone 1: single stationary test enemy
 
     // Internal helper to smoothly move camera.target toward m_player.m_position
     void UpdateCamera(float dt);
