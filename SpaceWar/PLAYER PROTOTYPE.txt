@@ -1,336 +1,904 @@
-PLAYER GAMEPLAY :
-# SPACEWAR — PLAYER SYSTEM DEVELOPMENT SPECIFICATION
-
-## 1. Player Overview
-
-The player controls a spaceship travelling through hostile space.
-
-The Player system is responsible for:
-- Movement and rotation.
-- Physics and acceleration.
-- Player input.
-- Health and damage.
-- Shooting.
-- Dash / boost.
-- Healing collection.
-- Player-related visual feedback.
-
-**Core principle:** Gameplay must be implemented and tested using placeholder graphics before introducing final sprites, animations, and visual effects.
-
----
-
-## 2. Player Controls
-
-### Confirmed controls
-
-| Action | Input |
-|---|---|
-| Rotation | Mouse |
-| Forward thrust | W (recommended binding) |
-| Reverse thrust | S (recommended binding) |
-| Continuous shooting | Toggle using left mouse button (recommended binding) |
-| Dash / boost | Space |
-| Pause | Deferred to menu/UI development |
-
-The W and S bindings are recommended defaults rather than explicitly finalized key assignments.
-
-### Rotation
-
-- The spaceship continuously faces the mouse cursor.
-- Rotation is instantaneous toward the cursor.
-- The mouse controls the direction of aiming and thrust.
-
-### Pause
-
-Pause functionality and its interface will be addressed during menu/UI development, not the initial Player implementation.
-
----
-
-## 3. Movement Physics
-
-**Status: CONFIRMED**
-
-SPACEWAR uses physics-based movement.
-
-### Movement behavior
-
-- The spaceship accelerates in the direction it faces.
-- Forward thrust activates through keyboard input.
-- Reverse thrust applies acceleration in the opposite direction.
-- Forward and reverse thrust have equal strength.
-- Releasing thrust does not stop the spaceship.
-- The spaceship gradually loses speed through natural drag.
-- Maximum normal speed is fixed.
-
-### Physics parameters
-
-| Parameter | Decision |
-|---|---|
-| Acceleration | Moderate |
-| Maximum speed | Fixed |
-| Natural drag | Slow |
-| Reverse thrust | Same strength as forward |
-| Rotation | Instant toward mouse |
-| Movement calculation | Velocity and acceleration |
-| Time calculation | Delta time |
-
-Exact numerical values will be tuned through testing.
-
-### Thruster effects
-
-- Exhaust appears behind the spaceship while thrust is active.
-- Exhaust stops when thrust is released.
-- Initial implementation uses simple placeholder shapes.
-
----
-
-## 4. Dash / Boost
-
-**Status: CONFIRMED**
-
-- Activated manually using Space.
-- Boosts the spaceship in its current facing direction.
-- Temporarily exceeds normal maximum speed.
-- Lasts a few seconds.
-- Has a cooldown.
-- Can be activated while already at maximum normal speed.
-
-Exact duration, boost strength, and cooldown values will be determined through testing.
-
----
-
-## 5. Camera and Environment
-
-**Status: CONFIRMED**
-
-### Camera
-
-- Smoothly follows the spaceship.
-- Keeps the spaceship at the center of the screen.
-- Uses fixed zoom.
-- Does not rotate with the spaceship.
-
-### Environment
-
-- Each level has defined boundaries.
-- Boundaries are invisible.
-- The player cannot leave the playable area.
-- Boundary collision should prevent the spaceship from escaping the level.
-
----
-
-## 6. Health and Survival
-
-**Status: CONFIRMED / INITIAL BALANCING VALUES**
-
-### Health
-
-- Starting health: 100%.
-- Maximum health: 100%.
-- Health displayed through a health bar.
-
-### Lives
-
-- Initial number of lives: 3.
-- Lives are shared across the five-level campaign.
-- Death restarts the current level.
-- Previously completed levels remain completed.
-
-### Damage values
-
-| Damage source | Damage |
-|---|---:|
-| Level 1 enemy projectile | 2% |
-| Level 2 enemy projectile | 5% |
-| Level 3 enemy projectile | 8% |
-| Enemy contact | 10% |
-| Asteroid collision | 10% |
-| Boss attack | 10% |
-
-These are initial balancing values and may be adjusted after gameplay testing.
-
-### Temporary invulnerability
-
-**Confirmed duration: 1 second.**
-
-After receiving damage:
-- The player becomes temporarily invulnerable.
-- Additional damage is ignored during this period.
-- The purpose is to prevent overlapping collisions and projectiles from instantly draining the health bar.
-
-### Critical health
-
-When health reaches 10% or less:
-- A heartbeat-like screen effect begins.
-- Screen darkening remains subtle.
-- The spaceship flashes red relatively quickly.
-- Future audio effects will reinforce the warning.
-
-### Death sequence
-
-1. Health reaches zero.
-2. One life is deducted immediately.
-3. Player movement, rotation, and shooting are disabled.
-4. A black hole appears.
-5. The black hole consumes the spaceship.
-6. The current level restarts.
-7. The spaceship emerges from a black hole as the level begins.
-
-The animation should be brief but clear.
-
----
-
-## 7. Healing Stones
-
-**Status: CONFIRMED**
-
-| Property | Decision |
-|---|---|
-| Healing per stone | 1% |
-| Disappearance time | 3 seconds |
-| Spawn positions | Random |
-| Spawn frequency | Scaled according to player health |
-| Collection at full health | Allowed, without increasing health |
-
-### Spawn behavior
-
-Healing stones should appear randomly.
-
-Their spawn frequency should increase when the player's health is low.
-
-This creates additional opportunities for recovery when the player is struggling.
-
-The exact health thresholds, spawn probabilities, and minimum/maximum spawn intervals remain to be determined.
-
-### Collection
-
-- A stone disappears after collection.
-- It restores 1% health.
-- A stone disappears automatically after three seconds if not collected.
-- Collecting a stone at full health does not increase health above 100%.
-
----
-
-## 8. Shooting System
-
-**Status: PARTIALLY CONFIRMED**
-
-### Starting weapon
-
-The player starts with a basic shooter.
-
-### Shooting activation
-
-**Toggle mode:**
-- Press the shooting button once to activate continuous shooting.
-- Press it again to deactivate shooting.
-
-The left mouse button is the recommended binding.
-
-### Projectile behavior
-
-- One projectile is fired per shot.
-- Continuous shooting can produce multiple successive projectiles.
-- Projectiles travel in the direction the spaceship faces.
-- Projectile speed is fixed.
-- A projectile disappears after hitting an enemy.
-- A projectile that misses disappears after reaching its maximum lifetime or travel distance.
-
-### Firing frequency
-
-Medium firing frequency.
-
-The exact firing interval remains to be tuned.
-
-Projectile creation and behavior belong to the Bullet system, not exclusively to Player.
-
----
-
-## 9. Future Player Abilities
-
-### Shooting Stars
-
-A future special attack:
-- Can destroy enemies.
-- Can damage bosses.
-- Will not be available in the earliest levels.
-
-### Black Hole Portal
-
-A future ability planned for a later or final level:
-- Transports the player to another position in the environment.
-- Can be used to evade enemy attacks.
-- Allows the player to attack from another position.
-
-This ability is separate from the black hole death animation.
-
----
-
-## 10. Player Visual Feedback
-
-Initial placeholder representations:
-
-| Element | Representation |
-|---|---|
-| Spaceship | Simple polygon |
-| Exhaust | Simple shapes |
-| Health bar | Rectangle |
-| Damage effect | Basic explosion |
-| Critical health | Red flashing |
-| Death | Placeholder black hole |
-| Healing stone | Small colored shape |
-| Projectiles | Small circles or rectangles |
-
-Final sprites, detailed animations, and audio will be introduced after gameplay validation.
-
----
-
-## 11. C++ Implementation Structure
-
-### Player.h
-
-Declares:
-- Player class.
-- Position and velocity.
-- Acceleration and movement properties.
-- Health and lives-related state where appropriate.
-- Shooting state.
-- Dash state and cooldown.
-- Public methods.
-
-### Player.cpp
-
-Implements:
-- Mouse-controlled rotation.
-- Forward and reverse thrust.
-- Physics and momentum.
-- Dash behavior.
-- Health and damage.
-- Invulnerability timer.
-- Shooting activation.
-- Player drawing and visual feedback.
-
----
-
-## 12. Recommended Development Order
-
-1. Create the Player class.
-2. Draw a placeholder spaceship.
-3. Implement mouse-controlled rotation.
-4. Implement forward thrust.
-5. Implement momentum and natural drag.
-6. Implement reverse thrust.
-7. Implement maximum speed.
-8. Implement camera following.
-9. Implement invisible environment boundaries.
-10. Implement dash and cooldown.
-11. Implement health and damage.
-12. Implement temporary invulnerability.
-13. Implement health bar and critical-health effects.
-14. Implement continuous shooting and connect Bullet.
-15. Implement healing stone collection.
-16. Implement death and respawn behavior.
-17. Test and balance the complete Player system.
-
----
-**The Player system must be fully functional and tested before introducing advanced gameplay and visual polish.**
+================================================================================
+SPACEWAR — PLAYER SYSTEM TECHNICAL DOCUMENTATION
+================================================================================
+
+This document is the single authoritative reference for the SPACEWAR Player
+system. It describes what is implemented in the C++ source code today, the
+decisions that shaped it, and what is still planned. A reader with no prior
+knowledge of the project should be able to understand the entire Player
+system from this file alone.
+
+--------------------------------------------------------------------------------
+1. PROJECT OVERVIEW
+--------------------------------------------------------------------------------
+
+SPACEWAR is a 2D top-down space shooter being developed in C++17 with the
+raylib game library, inside Visual Studio 2022 (MSVC, x64, Debug/Release).
+
+Gameplay concept: the player pilots a spaceship through a large bounded
+arena (world size 2400 x 1800 world units), fights enemies, collects
+healing stones, and survives for as long as possible. The game is still in
+early development — only the Player-side systems described here exist so
+far. Enemy, Asteroid, and Boss classes exist as header stubs but are not
+yet wired into gameplay.
+
+Role of the Player system: everything the player directly controls or
+experiences — movement, camera-relative aiming, energy-based acceleration,
+shooting, health, damage, invulnerability, death, respawn, healing, and the
+player-facing HUD.
+
+Purpose of this document: preserve every design decision, record why each
+behavior was chosen, and give a new developer an accurate map of the code.
+
+Development philosophy: gameplay is built and tested first with simple
+geometric placeholder shapes (triangles, circles, rectangles). Final
+sprites, animations, particles, and audio are deliberately deferred until
+gameplay is validated.
+
+--------------------------------------------------------------------------------
+2. PLAYER SYSTEM ARCHITECTURE
+--------------------------------------------------------------------------------
+
+Source files (all in src/):
+
+    Player.h / Player.cpp   — the spaceship: state, input, movement,
+                              acceleration, shooting state, health, HUD
+    Game.h   / Game.cpp     — coordinator: game loop, camera, bullet and
+                              healing-stone collections, HUD layout, Game Over
+    Bullet.h / Bullet.cpp   — projectile entity
+    HealingStone.h/.cpp     — healing pickup entity
+    Enemy/Asteroid/Boss.h/.cpp — stub classes, not yet used by Game
+    AssetManager.h/.cpp     — stub for future textures/audio
+    main.cpp                — window setup and main loop
+
+Responsibilities:
+
+Player owns everything about the ship itself: position, rotation, velocity,
+mouse-follow movement, energy/acceleration, shooting toggle and fire timing,
+shooting-mode flag, health, invulnerability, death, respawn, healing, and
+drawing the ship plus the health and energy bars.
+
+Game owns coordination: the main Update/Draw flow, the Camera2D, the
+collections of bullets and healing stones, spawning logic, collision-style
+checks against the player, and all screen-space HUD that is not player
+state (title, FPS, controls panel, Game Over, shooting-mode label).
+
+Bullet owns one projectile: position, velocity (fixed at spawn), lifetime,
+travel distance, expiry test, placeholder drawing, and collision bounds for
+future enemy hit detection.
+
+HealingStone owns one pickup: position, lifetime countdown, expiry test,
+overlap test, placeholder drawing.
+
+Communication pattern: Game is declared `friend class Game` inside Player,
+so Game can read private player state (position, rotation, velocity, health,
+dead flag, shooting-mode flag) and clear the one-frame `m_shotRequested`
+flag — the same pattern already used for camera tracking. No getters or
+setters exist anywhere in the project; this is a permanent OOP rule.
+Player never touches Game's collections; instead it raises flags/state that
+Game reads after `m_player.Update()` returns.
+
+Simple architecture diagram:
+
+    main.cpp
+       |
+       v
+    Game::Update(dt)
+       |-- m_player.Update(dt, camera)   -> movement, accel, shooting flags
+       |-- reads m_shotRequested         -> SpawnPlayerBullet()
+       |-- UpdateBullets(dt)             -> move + erase expired bullets
+       |-- UpdateHealingStones(dt)       -> spawn timer, lifetime, collect
+       |-- debug F1 damage / R respawn input
+       |-- UpdateCamera(dt)              -> smooth follow
+       v
+    Game::Draw()
+       |-- BeginMode2D(camera): stars, grid, boundary, reticle,
+       |     player.Draw(), bullets, healing stones
+       |-- screen space: title, FPS, health bar, energy bar,
+             shooting-mode label, controls panel, GAME OVER
+
+--------------------------------------------------------------------------------
+3. PLAYER CONTROLS
+--------------------------------------------------------------------------------
+
+| Input                    | Action                                        | Conditions / notes |
+|--------------------------|-----------------------------------------------|--------------------|
+| Mouse cursor             | Movement target + facing direction            | Always, while alive |
+| Left mouse single-click  | Toggle continuous shooting ON/OFF             | Fires after the 0.3 s double-click window expires with no second click |
+| Left mouse double-click  | Activate energy acceleration                  | Requires 100% energy; does NOT toggle shooting |
+| Space                    | Activate energy acceleration                  | Requires 100% energy; single press, no hold |
+| S                        | Switch Back/Front shooting mode               | One toggle per press (IsKeyPressed) |
+| F1                       | Temporary debug damage                        | 10% per press, once per press (IsKeyPressed) |
+| R                        | Respawn                                       | Only while dead; once per press |
+
+Single vs. double click: both share the left mouse button, so the first
+click of any pair is held in a "pending" state for DOUBLE_CLICK_WINDOW =
+0.3 seconds (constexpr double in Player.h). If a second press arrives
+inside the window, the pair is consumed as a double-click (acceleration
+attempt) and the pending shooting toggle is cancelled. If the window
+expires, the pending toggle fires and shooting switches. Consequence: a
+single click toggles shooting ~0.3 s after the physical click.
+
+Not implemented / deferred: W/S thrust (removed), pause/ESC (deferred to
+menu/UI milestone), any keyboard shooting toggle (the only shooting
+activation is the mouse click path described above).
+
+--------------------------------------------------------------------------------
+4. MOVEMENT SYSTEM — "OPTION A" (mouse-follow)
+--------------------------------------------------------------------------------
+
+This is controlled, direct-velocity movement — deliberately NOT physics.
+
+Behavior:
+- The ship automatically steers toward the world position under the mouse
+  cursor.
+- The ship instantly rotates to face the cursor (m_rotation = atan2(dy,dx);
+  0 radians = facing right, nose toward +x).
+- The ship does not teleport and does not overshoot: it stops within
+  STOP_DISTANCE = 6 px of the cursor.
+- Movement speed is capped (see speed parameters below) and reduced
+  smoothly inside SLOWING_RADIUS = 180 px so the ship arrives gently.
+
+Calculation per frame (Player::Update, section 3):
+
+    diff        = mouseWorldPos - m_position
+    dist        = length(diff)
+    if dist <= STOP_DISTANCE:  velocity = 0, thrusting = false
+    else:
+        rotation   = atan2(diff.y, diff.x)
+        speed      = m_speedCap  (see acceleration system)
+        if dist < SLOWING_RADIUS:
+            speed = m_speedCap * (dist / SLOWING_RADIUS)   // arrival ramp
+        velocity   = (diff / dist) * speed
+
+Then section 4 integrates:
+
+    stepDist = |velocity * dt|
+    if stepDist >= dist:  m_position = mouseWorldPos   // final arrival snap
+    else:                 m_position += velocity * dt
+
+Conceptual formula: distance moved per frame = speed x delta time.
+Because everything is multiplied by dt (GetFrameTime()), movement is
+frame-rate independent: 60 fps and 144 fps produce identical travel.
+
+Movement parameters (Player.h / constants):
+- DEFAULT_MAX_SPEED (m_maxSpeed): 420 px/s — normal speed ceiling.
+- ACCEL_MAX_SPEED: 840 px/s — ceiling while accelerating.
+- STOP_DISTANCE: 6 px.
+- SLOWING_RADIUS: 180 px.
+- SHIP_COLLISION_RADIUS: 18 px — boundary margin.
+- m_speedCap: dynamic ceiling, ramps between 420 and 840 (see section 6).
+
+Explicitly NOT used (removed earlier in development):
+- W/S thrust keys.
+- Physics acceleration/momentum/inertia.
+- Natural drag.
+The "acceleration" in section 6 is a speed-ceiling mechanic layered on top
+of this same direct-velocity movement — it is not physics-based movement.
+
+World boundaries:
+- The playable area is m_worldWidth x m_worldHeight (2400 x 1800).
+- After integration, position is clamped so the ship center stays at least
+  SHIP_COLLISION_RADIUS inside each edge; the velocity component pushing
+  outward is zeroed for that frame.
+- Boundary clamping applies ONLY to final position/velocity. It never
+  modifies m_energy, m_isAccelerating, or m_speedCap — acceleration state
+  progresses identically whether or not the ship can physically move.
+- Additionally, when the clamp actually blocks movement in a frame,
+  m_isAgainstBoundary is set true, which pauses the energy DRAIN while the
+  ship is pressed against a wall (a later design decision — see section 18).
+  Energy does not recharge while accelerating, so the bar simply freezes.
+
+--------------------------------------------------------------------------------
+5. CAMERA SYSTEM
+--------------------------------------------------------------------------------
+
+The camera is a raylib Camera2D owned and managed by Game — there is no
+separate camera class.
+
+Configuration (Game::Init):
+- target:  m_player.m_position (read via friendship, zero getters)
+- offset:  screenWidth/2, screenHeight/2  (ship centered on screen)
+- rotation: 0.0   (camera never rotates)
+- zoom:     1.5
+
+Follow behavior (Game::UpdateCamera): each frame the camera target moves
+toward the player position with an exponential smoothing blend:
+
+    blend = 1 - exp(-5.0 * dt)        // CAMERA_FOLLOW_SPEED = 5.0
+    target += (playerPos - target) * blend
+
+This produces a smooth trailing-follow effect. The camera never rotates
+with the ship.
+
+Screen vs. world coordinates:
+- World space = the 2400x1800 arena the entities live in.
+- Screen space = the 1280x720 window pixels.
+- The mouse arrives in screen pixels. Player::Update converts it with
+  GetScreenToWorld2D(mouseScreenPos, camera) so the ship chases the correct
+  world point even while the camera moves and at 1.5x zoom.
+
+Rendering split (Game::Draw):
+- Everything inside BeginMode2D(m_camera) ... EndMode2D() is transformed
+  by the camera: starfield, grid, world border, reticle, ship, bullets,
+  healing stones.
+- Everything drawn after EndMode2D() is fixed screen space: title, FPS,
+  health bar, energy bar, shooting-mode label, controls panel, GAME OVER.
+  This is why the HUD never moves with the camera or zoom.
+
+--------------------------------------------------------------------------------
+6. ENERGY-BASED ACCELERATION SYSTEM
+--------------------------------------------------------------------------------
+
+This system REPLACED the original dash/boost mechanic (a fixed 1-second,
+840 px/s dash with a 3-second cooldown). The dash code has been fully
+removed; do not look for it.
+
+Concept: an energy meter gates a speed boost. Think of it as a "boost
+energy" bar, not a dash.
+
+State (Player-private):
+- m_energy            — 0 to ENERGY_MAX (100), percent scale.
+- m_isAccelerating    — true while boost is active.
+- m_speedCap          — current speed ceiling, ramps smoothly.
+- m_isAgainstBoundary — wall-contact flag (pauses drain only).
+
+Activation:
+- Space key (IsKeyPressed) OR left mouse double-click.
+- Requires m_energy >= ENERGY_MAX (100%) and !m_isAccelerating.
+- Single press only; no holding. Double-click never toggles shooting.
+
+Energy behavior per frame (while alive):
+- Accelerating:  m_energy -= 25%/s  (ENERGY_CONSUMPTION_RATE)
+                 ...UNLESS m_isAgainstBoundary (drain paused at walls).
+                 At 0%: m_energy = 0, m_isAccelerating = false.
+- Not accelerating: m_energy += 12.5%/s (ENERGY_RECONARGE... see
+  ENERGY_RECHARGE_RATE), clamped at 100.
+
+Speed behavior:
+- targetSpeedCap = accelerating ? 840 : 420.
+- m_speedCap moves toward the target at ACCELERATION_RATE = 600 px/s^2,
+  symmetric ramp-up and ramp-down. This is what makes speed change
+  gradually instead of instantly.
+- Option A movement uses m_speedCap wherever it previously used the fixed
+  max speed, including inside the SLOWING_RADIUS arrival ramp — so the
+  ship still arrives gently at the cursor at any speed.
+
+Net effect: ~0.7 s to spin up from 420 to 840, ~4 s of boost from a full
+bar (25%/s drain), ~8 s to recharge from empty (12.5%/s).
+
+HUD: Player::DrawEnergyBar() draws a second fixed screen-space bar under
+the health bar (y=78). Fill color communicates state: blue = charging,
+orange = accelerating, green = full, plus a "READY [Space]" hint at 100%.
+
+Boundary interaction (final decision): walls constrain position only.
+Energy drain pauses while pressed against a wall; recharge is unaffected
+(it only runs while not accelerating). Acceleration state, speed cap, and
+timers are never reset by boundaries.
+
+Respawn resets: m_isAccelerating=false, m_energy=0, m_speedCap=420,
+m_isAgainstBoundary=false — the bar must recharge before the next boost.
+
+--------------------------------------------------------------------------------
+7. SHOOTING AND PROJECTILE SYSTEM
+--------------------------------------------------------------------------------
+
+Activation:
+- Left mouse single-click toggles continuous shooting (see the 0.3 s
+  pending-toggle mechanism in section 3).
+- When m_isShooting turns on, m_fireTimer is already 0, so the first shot
+  is requested the same frame — the "immediate first shot" requirement.
+- While on, Player::Update decrements m_fireTimer by dt; each time it
+  reaches 0 it resets to FIRE_INTERVAL = 0.25 s (~4 shots/second, "medium"
+  frequency) and sets m_shotRequested = true for one frame.
+- Toggling off resets m_fireTimer to 0 so re-activation fires instantly.
+
+Fire request -> bullet creation:
+- Game::Update checks m_player.m_shotRequested after player.Update, clears
+  it, and calls SpawnPlayerBullet().
+- SpawnPlayerBullet (Game, friend access) computes, at that exact moment:
+    facing       = (cos m_rotation, sin m_rotation)
+    spawnPos     = m_position +/- facing * offset   (mode dependent)
+    shootDir     = +/- facing                        (mode dependent)
+    bulletVel    = shootDir * BULLET_SPEED + m_velocity
+- BULLET_SPEED = 900 px/s (Bullet.h) — faster than dash/accel top speed
+  (840) so shots always pull ahead.
+- m_velocity is the player's CURRENT movement velocity, including the
+  accelerated speed while boosting. It is sampled once at spawn; bullets
+  never re-read player velocity afterward.
+
+Bullet lifecycle (Bullet.h/.cpp):
+- Members: position, velocity, spawnPosition, lifetimeRemaining,
+  distanceTraveled.
+- Update(dt): position += velocity*dt; lifetime -= dt;
+  distance += |velocity|*dt. Frame-rate independent.
+- IsExpired(): lifetimeRemaining <= 0  OR  distanceTraveled >=
+  BULLET_MAX_DISTANCE — whichever comes first.
+- BULLET_LIFETIME = 3.0 s, BULLET_MAX_DISTANCE = 3000 px, BULLET_RADIUS = 4.
+- Draw(): small yellow circle placeholder.
+- GetBounds(): square for future enemy collision (NOT yet used).
+- Game::UpdateBullets updates all bullets then erases expired ones with
+  std::remove_if — safe iterator handling, no artificial bullet cap.
+
+Collision status: enemy/bullet collision is DEFERRED — no enemies exist
+yet. Bullets currently only fly, expire, and render.
+
+--------------------------------------------------------------------------------
+8. FRONT AND BACK SHOOTING MODES
+--------------------------------------------------------------------------------
+
+State: Player::m_frontShooting (bool). false = Back (default at game start
+and after respawn), true = Front.
+
+Back Shooting (default):
+- Spawn offset: 20 units behind center along -facing (the ship's rear).
+- Bullet direction: -facing (180 degrees opposite the nose).
+- Examples: facing right -> spawn left, travel left; facing up -> spawn
+  bottom, travel down; etc.
+
+Front Shooting:
+- Spawn offset: 24 units ahead along +facing (near the nose; nose vertex
+  is at +22 in local space).
+- Bullet direction: +facing.
+
+Switching:
+- S key, IsKeyPressed(KEY_S) — one toggle per press; holding does nothing.
+- Does NOT touch m_isShooting, m_fireTimer, or m_shotRequested: continuous
+  fire continues uninterrupted and the NEXT bullet uses the new mode.
+- Already-fired bullets keep their stored velocity — they never change.
+
+HUD: "SHOOTING MODE: BACK" (light gray) or "SHOOTING MODE: FRONT" (yellow),
+drawn by Game in screen space at (20,116); updates the same frame S is
+pressed. Controls panel lists "S - Switch Shooting Mode".
+
+--------------------------------------------------------------------------------
+9. HEALTH AND DAMAGE SYSTEM
+--------------------------------------------------------------------------------
+
+Health (Player-private):
+- m_health, clamped conceptually to [0, PLAYER_MAX_HEALTH=100].
+- PLAYER_STARTING_HEALTH = 100.
+- m_isDead flag for the dead state.
+
+Damage — one general-purpose method for ALL sources:
+
+    Player::TakeDamage(float damageAmount)
+
+Order of checks:
+1. If m_isDead OR m_invulnerabilityTimer > 0 OR damageAmount <= 0 -> return
+   (ignored hits change nothing and do NOT touch the invulnerability timer).
+2. m_health -= damageAmount.
+3. If m_health <= 0: health = 0, m_isDead = true, velocity zeroed,
+   thrusting off, acceleration cancelled.
+4. Else: m_invulnerabilityTimer = INVULNERABILITY_DURATION (1.0 s).
+
+Debug damage: F1 key handled in Game::Update calls the SAME
+m_player.TakeDamage(10.0f) — DEBUG_DAMAGE_KEY/DEBUG_DAMAGE_AMOUNT
+constants at the top of Game.cpp, marked TEMPORARY. IsKeyPressed => once
+per press.
+
+Planned future damage values (NOT yet wired to any source — reference only):
+
+| Source                | Planned damage |
+|-----------------------|---------------:|
+| Level 1 enemy bullet  |            2% |
+| Level 2 enemy bullet  |            5% |
+| Level 3 enemy bullet  |            8% |
+| Enemy contact         |           10% |
+| Asteroid collision    |           10% |
+| Boss attack           |           10% |
+
+--------------------------------------------------------------------------------
+10. TEMPORARY INVULNERABILITY
+--------------------------------------------------------------------------------
+
+- INVULNERABILITY_DURATION = 1.0 s, stored as m_invulnerabilityTimer.
+- Begins immediately after a NON-LETHAL accepted hit (lethal hits kill
+  instead — no protection for a corpse).
+- Timer decrements by dt every Update, even while dead (harmless).
+- Hits during protection return early: no health loss, no timer reset or
+  extension. The full 1 s always runs its course.
+- Player::Heal does NOT interact with the timer — healing works while
+  invulnerable and neither grants nor resets protection.
+- Respawn sets the timer to 0 -> immediately vulnerable.
+- Logic only: NO flashing, transparency, screen effects, or sounds exist.
+
+--------------------------------------------------------------------------------
+11. HEALTH HUD
+--------------------------------------------------------------------------------
+
+Player::DrawHealthBar() — called by Game::Draw in screen space:
+- Fixed position (20,50), size 220x16, below the "SPACEWAR" title.
+- Dark background + border for the empty portion.
+- Fill width = m_health / PLAYER_MAX_HEALTH (always in [0,1] because health
+  is already clamped — the bar can never show <0% or >100%).
+- Fill color: green >50%, yellow <=50%, red <=25%.
+- Percentage text via TextFormat("%d%%", ...) beside the bar.
+- Reads m_health internally; no duplicate health variable, no getters.
+
+--------------------------------------------------------------------------------
+12. DEATH AND GAME OVER
+--------------------------------------------------------------------------------
+
+When TakeDamage drives health to 0:
+1. m_health = 0 exactly, m_isDead = true.
+2. velocity zeroed, thruster off, acceleration cancelled.
+3. Player::Update returns immediately on m_isDead — no movement, no
+   rotation update, no dash/accel, no shooting toggles, no new
+   m_shotRequested (so no new bullets can be created).
+4. TakeDamage ignores all further damage while dead.
+5. Ship stays rendered at its final position; health bar shows 0%.
+6. Game::Draw shows a centered red "GAME OVER" (64 px, MeasureText-centered)
+   in screen space — persists until respawn or window close.
+
+Bullets already in flight keep their stored velocity and expire normally.
+Healing stones freeze (see section 14).
+
+NOT implemented (deferred): death animation, black-hole effect, life
+loss, auto level restart.
+
+--------------------------------------------------------------------------------
+13. RESPAWN SYSTEM (temporary, R key)
+--------------------------------------------------------------------------------
+
+Trigger: Game::Update — `if (m_player.m_isDead && IsKeyPressed(KEY_R))
+m_player.Respawn(m_camera);` — dead-only, once per press.
+
+Player::Respawn(camera) resets ONLY player state:
+- m_position = m_spawnPosition (stored in constructor = original spawn,
+  {1200,900} arena center).
+- m_health = 100, m_isDead = false.
+- m_velocity = 0, m_isThrustingForward = false.
+- Acceleration: m_isAccelerating=false, m_energy=0, m_speedCap=420,
+  m_isAgainstBoundary=false. (Energy restarts EMPTY — the bar must recharge
+  ~8 s before the next boost; this was the implemented choice.)
+- Shooting: m_isShooting=false, m_fireTimer=0, m_shotRequested=false,
+  m_frontShooting=false (Back mode restored). No bullet auto-fires.
+- Invulnerability: m_invulnerabilityTimer=0 -> immediately vulnerable.
+- Mouse click state: m_lastClickTime=-1, m_shootingTogglePending=false.
+- m_rotation = atan2 toward the CURRENT mouse world position (same math
+  as normal steering), so the ship instantly faces the cursor.
+
+Nothing else resets: bullets, healing stones (they resume from frozen),
+world, camera (it smoothly follows back), enemies when they exist.
+
+--------------------------------------------------------------------------------
+14. HEALING STONES
+--------------------------------------------------------------------------------
+
+HealingStone (entity): position + lifetimeRemaining (HEALING_STONE_LIFETIME
+= 3.0 s). Update(dt) ages it; IsExpired() at <=0; Overlaps(pos,radius) is a
+squared-distance circle test (radius 8); Draw() is a small cyan circle.
+
+Player::Heal(amount): m_health += amount clamped to 100; ignored while
+dead; never touches invulnerability.
+
+Game coordination (UpdateHealingStones, called every Update):
+- DEAD FREEZE: if m_player.m_isDead -> return immediately. No spawning,
+  no lifetime countdown, no collection. Stones freeze in place (still
+  drawn) and resume exactly where they paused on respawn. Nothing is
+  deleted on death.
+- Spawn timer counts down by dt; on expiry TrySpawnHealingStone() picks
+  the interval from CURRENT health and resets the timer BEFORE attempting
+  the spawn, so threshold crossings can't double-spawn.
+
+Spawn rules (final):
+
+| Player health | Behavior                          |
+|---------------|-----------------------------------|
+| > 50%         | No spawning; timer rechecks every 1 s (HEALING_STONE_SPAWN_RECHECK_INTERVAL) so spawning resumes promptly when health drops |
+| 31%–50%       | One stone every 5 s               |
+| <= 30%        | One stone every 3 s               |
+
+(The original 8 s high-health interval was removed.)
+
+Spawn position (TryFindStoneSpawnPos):
+- Visible world rect = camera.target +/- (screenSize/2)/zoom, i.e. the
+  1280x720 view at 1.5x zoom = 853x480 world units around the smoothed
+  camera center — NOT the whole world.
+- Intersected with world bounds [0,2400]x[0,1800].
+- Up to 20 random attempts (HEALING_STONE_MAX_SPAWN_ATTEMPTS); a candidate
+  must be >= HEALING_STONE_MIN_PLAYER_DISTANCE = 100 units from the
+  player. Failure -> spawn attempt skipped safely, timer already reset.
+- The area follows the camera naturally because it is derived from
+  camera.target each spawn.
+
+Collection: each frame, stones overlapping the player
+(HEALING_STONE_RADIUS + SHIP_COLLISION_RADIUS) are removed via
+iterator-erase and m_player.Heal(HEALING_AMOUNT=1.0f) is called.
+Collection at 100% health still consumes the stone (health stays capped).
+Healing works during invulnerability and does not affect its timer.
+
+--------------------------------------------------------------------------------
+15. HUD AND CONTROLS PANEL
+--------------------------------------------------------------------------------
+
+All HUD is screen-space (after EndMode2D), fixed regardless of camera:
+
+| Element                     | Position / style |
+|-----------------------------|------------------|
+| "SPACEWAR" title            | (20,20), size 20, white |
+| FPS counter                 | top-right, DrawFPS |
+| Health bar + %              | (20,50), 220x16, green/yellow/red |
+| Energy bar + % + READY hint | (20,78), 220x16, blue/orange/green |
+| Shooting mode label         | (20,116), size 16, gray/yellow |
+| CONTROLS panel              | starts (20,260), size 14 rows every 18 px |
+| GAME OVER                   | centered, 64 px red, dead only |
+| "R - Respawn"               | extra yellow row, dead only |
+
+Controls panel contents (current, in order): Mouse - Move & aim;
+Left Click - Toggle Shooting; Left Double-Click - Activate Acceleration;
+Space - Accelerate (energy); S - Switch Shooting Mode; F1 - Debug damage
+(temporary); R - Respawn (temporary, dead only).
+
+--------------------------------------------------------------------------------
+16. LIBRARIES AND IMPORTANT FUNCTIONS
+--------------------------------------------------------------------------------
+
+Libraries:
+- raylib (vcpkg, raylib 6.x headers): window, rendering, input, Camera2D,
+  vectors, text, frame timing.
+- C++17 standard library, actually used in player-related files:
+    <cmath>      — std::hypot, std::atan2, std::sin, std::cos, std::sqrt-free
+                   (hypot used for distances)
+    <algorithm>  — std::min, std::max (speed-cap ramp), std::remove_if
+                   (bullet cleanup in Game.cpp)
+    <vector>     — bullet and healing-stone collections (Game.h)
+  No <string>, no std::clamp, no getters/setters anywhere.
+
+Important raylib functions actually used:
+
+| Function                  | Purpose | Used in |
+|---------------------------|---------|---------|
+| InitWindow/CloseWindow    | Window lifecycle | main.cpp |
+| SetTargetFPS(60)          | Frame cap | main.cpp |
+| GetFrameTime()            | Seconds since last frame (dt) | main loop -> Update |
+| BeginDrawing/EndDrawing   | Frame render bracket | Game::Draw |
+| ClearBackground/DrawRectangleGradientV | Background | Game::Draw |
+| BeginMode2D/EndMode2D     | Camera transform bracket | Game::Draw |
+| GetMousePosition()        | Cursor in screen px | Player::Update, Respawn |
+| GetScreenToWorld2D()      | Screen px -> world coords | Player::Update, Respawn |
+| IsKeyPressed(KEY_*)       | Once-per-press key edge | Space, S, F1(via Game), R(via Game) |
+| IsMouseButtonPressed()    | Once-per-press mouse edge | LMB click detection |
+| GetTime()                 | Seconds since init (double) | double-click window |
+| DrawText/TextFormat       | HUD text | bars, panel, GAME OVER |
+| MeasureText               | Center GAME OVER | Game::Draw |
+| DrawRectangle(Lines)      | HUD bars | Player::DrawHealthBar/EnergyBar |
+| DrawCircleV/LinesV        | Ship parts, bullets, stones, reticle | Player/Bullet/HealingStone/Game |
+| DrawTriangle/DrawLineV    | Ship hull, thruster | Player::Draw |
+| DrawFPS                   | FPS counter | Game::Draw |
+
+Project-defined methods (the real API surface):
+
+| Method                              | Class         | What it does / when called |
+|-------------------------------------|---------------|----------------------------|
+| Update(dt, camera)                  | Player        | Every frame: invuln tick, dead check, mouse->world, energy/accel, Option A movement, boundaries, shooting timers, S-mode toggle, click disambiguation |
+| Draw()                              | Player        | Renders ship hull + thruster flame (world space) |
+| DrawHealthBar()                     | Player        | Screen-space health bar + % (called by Game::Draw) |
+| DrawEnergyBar()                     | Player        | Screen-space energy bar + READY hint |
+| TakeDamage(amount)                  | Player        | Universal damage entry; invuln/dead gates; death handling |
+| Heal(amount)                        | Player        | +health clamped to 100; dead-safe; invuln-independent |
+| Respawn(camera)                     | Player        | Full player-only reset; called by Game on R while dead |
+| Update(dt) / Draw() / IsExpired() / Overlaps() / GetBounds() | Bullet | Projectile move/age, render, expiry, future collision |
+| Update(dt) / Draw() / IsExpired() / Overlaps()             | HealingStone | Lifetime age, render, expiry, collection test |
+| Init() / Update(dt) / Draw()        | Game          | Camera setup; per-frame coordination; all rendering |
+| UpdateCamera(dt)                    | Game          | Exponential smooth follow of player position |
+| SpawnPlayerBullet()                 | Game          | Builds Bullet from player state (friend access) |
+| UpdateBullets(dt)                   | Game          | Move bullets, erase expired via remove_if |
+| UpdateHealingStones(dt)             | Game          | Dead-freeze gate, spawn timer, age/collect/erase stones |
+| TrySpawnHealingStone()              | Game          | Health-based interval + spawn attempt |
+| TryFindStoneSpawnPos(out)           | Game          | Random point in visible world rect, >=100u from player, <=20 tries |
+
+--------------------------------------------------------------------------------
+17. IMPORTANT CONFIGURATION VALUES
+--------------------------------------------------------------------------------
+
+| Parameter                        | Value      | Unit        | Where defined |
+|----------------------------------|-----------:|-------------|---------------|
+| World size                       | 2400x1800  | world units | Game ctor     |
+| Screen size                      | 1280x720   | px          | main.cpp      |
+| Normal max speed (m_maxSpeed)    | 420        | px/s        | Player.h DEFAULT_MAX_SPEED |
+| Accelerated max speed            | 840        | px/s        | Player.h ACCEL_MAX_SPEED |
+| Acceleration rate                | 600        | px/s^2      | Player.h ACCELERATION_RATE |
+| Energy max / consumption         | 100 / 25   | % / %/s     | Player.h ENERGY_MAX / ENERGY_CONSUMPTION_RATE |
+| Energy recharge                  | 12.5       | %/s         | Player.h ENERGY_RECHARGE_RATE |
+| STOP_DISTANCE                    | 6          | px          | Player.h |
+| SLOWING_RADIUS                   | 180        | px          | Player.h |
+| SHIP_COLLISION_RADIUS            | 18         | px          | Player.h |
+| Camera zoom / follow speed       | 1.5 / 5.0  | x / rate    | Game::Init / UpdateCamera |
+| FIRE_INTERVAL                    | 0.25       | s           | Player.h (~4 shots/s) |
+| BULLET_SPEED                     | 900        | px/s        | Bullet.h |
+| BULLET_LIFETIME / MAX_DISTANCE   | 3.0 / 3000 | s / px      | Bullet.h |
+| BULLET_RADIUS                    | 4          | px          | Bullet.h |
+| Back spawn offset / Front offset | 20 / 24    | world units | Game::SpawnPlayerBullet |
+| DOUBLE_CLICK_WINDOW              | 0.3        | s           | Player.h |
+| PLAYER_MAX/STARTING_HEALTH       | 100 / 100  | %           | Player.h |
+| INVULNERABILITY_DURATION         | 1.0        | s           | Player.h |
+| DEBUG_DAMAGE_KEY / AMOUNT        | F1 / 10    | key / %     | Game.cpp (temporary) |
+| HEALING_AMOUNT / LIFETIME        | 1.0 / 3.0  | % / s       | HealingStone.h |
+| HEALING_STONE_RADIUS             | 8          | px          | HealingStone.h |
+| Stone min player distance        | 100        | world units | Game.cpp |
+| Stone max spawn attempts         | 20         | tries       | Game.cpp |
+| Stone spawn recheck (hp>50%)     | 1.0        | s           | Game.cpp |
+| Stone interval 31–50% / <=30%    | 5.0 / 3.0  | s           | Game.cpp |
+
+Discrepancies vs. earlier decisions: none found between this table and the
+source — all values verified in code.
+
+--------------------------------------------------------------------------------
+18. DEVELOPMENT DECISIONS — QUESTIONS AND FINAL ANSWERS
+--------------------------------------------------------------------------------
+
+### A. Movement and Camera
+
+Q: Keyboard (W/S) thrust or mouse-follow movement?
+Final: Mouse-follow ("Option A"). Ship steers to cursor automatically.
+Implementation: Player::Update sections 1-4.
+Reason: Selected during early prototyping; direct control feel.
+
+Q: Smooth movement or teleport-to-cursor?
+Final: Smooth — velocity = direction x speed x dt, with arrival snap only
+when the step would reach the cursor.
+Implementation: stepDist >= dist check in section 4.
+
+Q: Rotation behavior?
+Final: Instant atan2 toward cursor every frame while alive.
+Implementation: m_rotation = std::atan2(diffY, diffX).
+
+Q: Physics-based movement (accel/momentum/drag)?
+Final: Rejected. Direct velocity, zero inertia. (Prototype originally
+specified physics; superseded.)
+Implementation: no physics terms exist in Player.cpp.
+
+Q: Normal max speed?
+Final: 420 px/s.
+
+Q: Delta time?
+Final: Yes — GetFrameTime() drives all movement, timers, energy.
+Implementation: every Update uses dt; frame-rate independent.
+
+Q: Arrival behavior?
+Final: Stop within 6 px; linear slowdown inside 180 px radius.
+Implementation: STOP_DISTANCE, SLOWING_RADIUS constants.
+
+Q: Camera ownership?
+Final: Game owns Camera2D; Player never touches it (only reads it for
+coordinate conversion).
+
+Q: Camera parameters?
+Final: zoom 1.5, rotation 0, exponential follow at 5.0/s, offset centers
+ship. Implementation: Game::Init/UpdateCamera.
+
+Q: World boundaries?
+Final: Hard clamp at SHIP_COLLISION_RADIUS inside edges; invisible (the
+visible red border is a debug aid). Boundaries never modify acceleration
+state; wall contact pauses only the energy drain.
+Implementation: section 5 clamps; m_isAgainstBoundary flag.
+
+### B. Acceleration
+
+Q: Dash vs. energy system?
+Final: Energy-based acceleration replaced dash entirely (dash code removed).
+Reason: Iterative design during development; user-requested replacement.
+
+Q: Activation inputs?
+Final: Space key OR left mouse double-click.
+Implementation: section 2 (Space) and section 6 (double-click branch).
+
+Q: Full energy required?
+Final: Yes — m_energy must be >= 100.
+
+Q: Hold or single press?
+Final: Single press; runs until energy = 0.
+
+Q: Gradual speed?
+Final: Yes — m_speedCap ramps at 600 px/s^2 toward 840 (or back to 420).
+Implementation: ramp block in section 2.
+
+Q: Accelerated max speed?
+Final: 840 px/s (2x normal).
+
+Q: Drain / recharge rates?
+Final: 25%/s drain, 12.5%/s recharge (~4 s boost, ~8 s recharge from empty).
+
+Q: Auto-stop?
+Final: At 0% energy; recharge begins automatically.
+
+Q: Reactivation?
+Final: Only at 100% energy again.
+
+Q: Boundary interaction (final decision)?
+Final: Position clamped as usual; energy DRAIN pauses while pressed
+against a wall (m_isAgainstBoundary); recharge unaffected; accel state
+never resets. This was an explicit user decision reversing the earlier
+"drain continues at walls" rule.
+Implementation: drain guarded by !m_isAgainstBoundary.
+
+### C. Shooting
+
+Q: Continuous or single shots?
+Final: Continuous toggle, medium rate.
+
+Q: Activation?
+Final: LMB single-click toggles (with 0.3 s pending delay to disambiguate
+double-click). No keyboard shooting binding exists.
+
+Q: First shot?
+Final: Immediate — fire timer is 0 when toggled on.
+
+Q: Firing interval?
+Final: FIRE_INTERVAL = 0.25 s.
+
+Q: Projectile speed?
+Final: BULLET_SPEED = 900 px/s, chosen faster than 840 accel top speed.
+Reason: ensures shots pull ahead of the ship (implementation detail
+documented in code comment).
+
+Q: Spawn location / direction?
+Final: Mode-dependent — Back: rear, opposite facing; Front: nose, along
+facing. See section 8.
+
+Q: Velocity inheritance?
+Final: bulletVel = shootDir*BULLET_SPEED + m_velocity captured at fire
+time. Applies during acceleration too. Bullets never update velocity.
+Reason: explicit user requirement for testing.
+
+Q: Lifetime vs. distance?
+Final: Both — bullet expires at 3.0 s OR 3000 px, whichever first.
+
+Q: Max bullet count?
+Final: None — expired bullets are erased each frame.
+
+Q: Enemy collision?
+Final: Deferred — Bullet::GetBounds() prepared for it.
+
+### D. Health and Damage
+
+Q: Where is health managed?
+Final: Inside Player (m_health, m_isDead). Game never computes health.
+
+Q: Max / start health?
+Final: 100 / 100 (% scale).
+
+Q: Damage API?
+Final: Single TakeDamage(amount) for all sources; clamps to [0,100];
+dead at 0.
+
+Q: Debug damage?
+Final: F1, 10% per press, temporary constants in Game.cpp, same code path
+as real damage.
+
+Q: Invulnerability duration?
+Final: 1.0 s (INVULNERABILITY_DURATION).
+
+Q: When does it start?
+Final: Immediately after a non-lethal accepted hit.
+
+Q: Do ignored hits reset the timer?
+Final: No — early return leaves timer untouched.
+
+Q: Visual effects?
+Final: None — logic only (explicit user restriction).
+
+### E. Death and Respawn
+
+Q: What happens at 0 health?
+Final: Dead flag set, all motion/shooting/accel frozen via early return,
+ship stays visible, GAME OVER centered, stones freeze.
+
+Q: Does the player stay visible?
+Final: Yes — Draw() has no dead check.
+
+Q: Does movement/shooting stop?
+Final: Yes — Update() returns on m_isDead.
+
+Q: Game Over presentation?
+Final: Centered red text until respawn/close. No buttons, no restart.
+
+Q: Respawn input?
+Final: R key, dead-only, IsKeyPressed.
+
+Q: Respawn position?
+Final: m_spawnPosition = original constructor spawn (arena center).
+
+Q: Respawn health / rotation?
+Final: 100%; instantly faces current mouse world position.
+
+Q: Acceleration reset?
+Final: Off, energy 0, speedCap 420, boundary flag cleared. (Energy
+restarts empty — implemented choice, noted for tuning.)
+
+Q: Shooting reset?
+Final: Off, timers cleared, mode back to Back, no auto-fire.
+
+Q: Whole game reset?
+Final: No — Player only. Explicit user restriction.
+
+### F. Healing Stones
+
+Q: Healing amount / lifetime?
+Final: 1% / 3 s.
+
+Q: Spawn location?
+Final: Random inside camera-visible world rect (not whole world),
+intersected with world bounds, >=100 units from player, max 20 attempts.
+
+Q: Health thresholds / intervals?
+Final: >50% none (1 s recheck); 31-50% every 5 s; <=30% every 3 s.
+(8 s interval removed.)
+
+Q: Collection at full health?
+Final: Allowed — stone consumed, health stays 100.
+
+Q: Healing during invulnerability?
+Final: Works; does not grant or reset invulnerability.
+
+Q: On death?
+Final: Full system freeze — no spawn, no aging, no collection; stones
+persist frozen (not deleted). On respawn everything resumes mid-state.
+Implementation: early return on m_isDead in UpdateHealingStones.
+
+--------------------------------------------------------------------------------
+19. CURRENT IMPLEMENTATION STATUS
+--------------------------------------------------------------------------------
+
+| System                                    | Status |
+|-------------------------------------------|--------|
+| Mouse-follow movement + instant rotation  | Implemented, confirmed working |
+| Camera follow (Game-owned Camera2D)       | Implemented, confirmed working |
+| World boundary clamping                    | Implemented, confirmed working |
+| Energy acceleration (Space + dbl-click)   | Implemented, confirmed working |
+| Wall-contact energy drain pause           | Implemented; built cleanly, behavior per spec (user-directed change) |
+| Shooting (toggle, rear mode)               | Implemented, confirmed working |
+| Front/Back shooting modes (S key)          | Implemented in code and built; user has not yet reported manual test confirmation |
+| Bullet lifetime/distance/cleanup           | Implemented, confirmed working |
+| Bullet velocity inheritance                | Implemented, confirmed working |
+| Health / damage / clamp / dead state       | Implemented, confirmed working |
+| Temporary invulnerability (1 s)            | Implemented, confirmed working |
+| F1 debug damage                            | Implemented, confirmed working |
+| Health bar + energy bar HUD                | Implemented, confirmed working |
+| Death freeze + GAME OVER                   | Implemented, confirmed working |
+| R respawn (full player reset)              | Implemented, confirmed working |
+| Healing stones (spawn/collect/expire)      | Implemented, confirmed working |
+| Stone health-threshold spawn rules         | Implemented, confirmed working |
+| Stone freeze on death / resume on respawn  | Implemented; built cleanly |
+| Enemy / Asteroid / Boss                    | Stubs only — Planned |
+| Enemy collision, lives, death animation,   | Planned / Deferred |
+| black hole, critical-health FX, audio,     | |
+| sprites, menus, pause                      | |
+
+Note on S-mode switch: code is complete and compiles; per this document's
+rules it is marked "implemented, verification pending" until the user
+confirms manual testing.
+
+No discrepancies were found between reported-working systems and the
+source code during this documentation pass.
+
+--------------------------------------------------------------------------------
+20. DEFERRED AND FUTURE FEATURES
+--------------------------------------------------------------------------------
+
+Preserved from the original prototype — NONE are implemented:
+
+- Lives system (3 shared campaign lives planned).
+- Level restart / campaign progression (5-level campaign planned).
+- Death animation: black hole consumes ship, respawn-from-black-hole intro.
+- Critical health (<=10%) effects: heartbeat, subtle darkening, red flash.
+- Temporary invulnerability VISUAL feedback (flashing/blinking).
+- Healing stone visual polish.
+- Shooting Stars special attack (future, not in early levels).
+- Black Hole Portal ability (late/final level teleport).
+- Final sprites, detailed animations, particles, muzzle flash.
+- Sound effects / music (AssetManager stub awaits assets).
+- Enemy, asteroid, boss implementations and all combat collision.
+- Pause/menu system (ESC deferred).
+- Additional weapons and upgrades.
+
+Original prototype plans superseded by implementation: physics-based
+movement with W/S thrust -> replaced by Option A mouse-follow; fixed 1 s
+dash with cooldown -> replaced by energy acceleration; instant shooting
+activation -> replaced by click toggle (single/double-click disambiguation).
+
+================================================================================
+END OF DOCUMENT
+================================================================================

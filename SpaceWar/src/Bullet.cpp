@@ -1,46 +1,46 @@
 // Bullet.cpp
 // Purpose: Implements the methods declared in Bullet.h.
 //
-// This file will contain the logic for projectile movement, off-screen
-// deactivation, collision bounds calculation, and sprite rendering.
+// This file contains projectile movement, lifetime/distance expiry,
+// placeholder rendering, and collision bounds for future enemy integration.
 
 #include "Bullet.h"
+#include <cmath>
 
-Bullet::Bullet()
-    : position{ 0.0f, 0.0f },
-      velocity{ 0.0f, 0.0f },
-      speed(0.0f),
-      damage(10),
-      texture{},
-      active(false)
+Bullet::Bullet(Vector2 spawnPos, Vector2 bulletVelocity)
+    : position(spawnPos)
+    , velocity(bulletVelocity)
+    , spawnPosition(spawnPos)
+    , lifetimeRemaining(BULLET_LIFETIME)
+    , distanceTraveled(0.0f)
 {
-    // TODO: Initialize default projectile properties.
-}
-
-Bullet::~Bullet()
-{
-    // TODO: Clean up any bullet-specific resources if needed.
 }
 
 void Bullet::Update(float deltaTime)
 {
-    // TODO: Move bullet using velocity * speed * deltaTime and deactivate if off-screen.
-    (void)deltaTime;
+    position.x += velocity.x * deltaTime;
+    position.y += velocity.y * deltaTime;
+
+    lifetimeRemaining -= deltaTime;
+    distanceTraveled += std::hypot(velocity.x, velocity.y) * deltaTime;
 }
 
 void Bullet::Draw() const
 {
-    // TODO: Render the bullet texture at its current position if active.
+    DrawCircleV(position, BULLET_RADIUS, Color{ 255, 220, 80, 255 }); // placeholder: yellow orb
 }
 
-bool Bullet::IsOffScreen() const
+bool Bullet::IsExpired() const
 {
-    // TODO: Check if position is outside the game window boundaries.
-    return false;
+    // Whichever limit is hit first removes the projectile
+    return lifetimeRemaining <= 0.0f || distanceTraveled >= BULLET_MAX_DISTANCE;
 }
 
 Rectangle Bullet::GetBounds() const
 {
-    // TODO: Return a Rectangle matching the bullet's position and texture size.
-    return Rectangle{ position.x, position.y, 0.0f, 0.0f };
+    // Square bounds centered on the projectile, ready for future collision
+    return Rectangle{ position.x - BULLET_RADIUS,
+                      position.y - BULLET_RADIUS,
+                      BULLET_RADIUS * 2.0f,
+                      BULLET_RADIUS * 2.0f };
 }
