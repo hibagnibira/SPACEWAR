@@ -14,6 +14,9 @@ Enemy::Enemy(Vector2 spawnPos, float size)
     , m_cornerHolding(false)
     , m_fireTimer(ENEMY_FIRE_INTERVAL)
     , m_shotRequested(false)
+    , m_retreatTimer(0.0f)
+    , m_shotAimPoint{ 0.0f, 0.0f }
+    , m_shotCount(0)
 {
 }
 
@@ -37,12 +40,20 @@ void Enemy::PickNewDestination(float minX, float minY, float maxX, float maxY)
 // Wander until the enemy enters the camera's visible world area, then
 // chase the player permanently. All movement uses delta time.
 // ----------------------------------------------------------------------------
-void Enemy::Update(float dt, Vector2 playerPos, const Camera2D& camera,
+void Enemy::Update(float dt, Vector2 playerPos, Vector2 playerVelocity,
+                   const Camera2D& camera,
                    float worldWidth, float worldHeight,
                    bool playerAccelerating, bool playerDead, bool avoidContact,
                    Vector2 otherEnemyPos, bool otherEnemyActive)
 {
     if (dt <= 0.0f || IsDestroyed()) return;
+
+    // Post-contact retreat cooldown (set by Game when this enemy touches
+    // the player) — counts down regardless of AI state.
+    if (m_retreatTimer > 0.0f)
+    {
+        m_retreatTimer -= dt;
+    }
 
     // --- Player detection: latches permanently on first entry into view ---
     // While the player is dead, chasing is suspended entirely: the latch
@@ -81,6 +92,10 @@ void Enemy::Update(float dt, Vector2 playerPos, const Camera2D& camera,
             if (std::hypot(fdx, fdy) > 1.0f)
             {
                 m_shotRequested = true;
+                // Enemy decides WHERE to aim (current vs predicted position);
+                // Game only launches the projectile toward m_shotAimPoint.
+                m_shotAimPoint = ComputeShotAimPoint(playerPos, playerVelocity);
+                ++m_shotCount;
             }
             m_fireTimer = ENEMY_FIRE_INTERVAL;
         }
@@ -90,23 +105,40 @@ void Enemy::Update(float dt, Vector2 playerPos, const Camera2D& camera,
     Vector2 target;
     if (m_isChasing)
     {
-        target = playerPos; // continuously track the player's live position
-
-        // Exclusive contact engagement: while the OTHER enemy owns contact,
-        // keep backing away from the player for the duration of the
-        // engagement, then normal AI resumes automatically.
-        if (avoidContact)
+        // Predictive pursuit: aim at the player's near-future position
+        // (pos + velocity * lookahead), capped so boost speed cannot
+        // fling the aim too far ahead. Recomputed every frame — direction
+        // changes, acceleration, and stops are tracked immediately; when
+        // the player stops, velocity is ~0 and the aim returns to
+        // playerPos. Contact retreat and the corner band below still use
+        // the player's REAL position, so those rules are unaffected.
+        Vector2 lead = { playerVelocity.x * ENEMY_PREDICT_TIME,
+                         playerVelocity.y * ENEMY_PREDICT_TIME };
+        const float leadLen = std::hypot(lead.x, lead.y);
+        if (leadLen > ENEMY_PREDICT_MAX_LEAD)
         {
-            const float adx = position.x - playerPos.x;
-            const float ady = position.y - playerPos.y;
-            const float adist = std::hypot(adx, ady);
-            if (adist > 0.001f)
-            {
-                target = {
-                    position.x + (adx / adist) * ENEMY_CONTACT_AVOID_DISTANCE,
-                    position.y + (ady / adist) * ENEMY_CONTACT_AVOID_DISTANCE
-                };
-            }
+            const float s = ENEMY_PREDICT_MAX_LEAD / leadLen;
+            lead.x *= s;
+            lead.y *= s;
+        }
+        target = { playerPos.x + lead.x, playerPos.y + lead.y };
+
+        // Withdrawal from the player happens when the OTHER enemy owns the
+        // exclusive contact engagement (avoidContact) OR right after this
+        // enemy made contact itself (m_retreatTimer, set by Game on touch).
+        // The retreat keeps contact a transient bump — the same feel Type 2
+        // gets from its offset intercept point — instead of parking on the
+        // player and re-damaging every invulnerability window. Normal
+        // pursuit resumes automatically when the timer expires.
+        const float adx = position.x - playerPos.x;
+        const float ady = position.y - playerPos.y;
+        const float adist = std::hypot(adx, ady);
+        if ((avoidContact || m_retreatTimer > 0.0f) && adist > 0.001f)
+        {
+            target = {
+                position.x + (adx / adist) * ENEMY_CONTACT_AVOID_DISTANCE,
+                position.y + (ady / adist) * ENEMY_CONTACT_AVOID_DISTANCE
+            };
         }
 
         // Corner/edge awareness: distance band with hysteresis instead of a
@@ -308,6 +340,46 @@ void Enemy::Update(float dt, Vector2 playerPos, const Camera2D& camera,
     }
 }
 
+// ----------------------------------------------------------------------------
+// ComputeShotAimPoint
+// Alternating targeting: most shots aim at the player's CURRENT position;
+// every ENEMY1_PREDICT_IN_CYCLE-th slot of the cycle aims predictively.
+// Prediction = playerPos + velocity * travelTime, where travelTime is the
+// projectile's estimated flight time (distance / ENEMY_PROJ_SPEED), capped
+// by ENEMY1_AIM_MAX_PREDICT_TIME and the lead distance cap. A stationary
+// or slow player yields ~zero lead, so those shots are near-current anyway.
+// ----------------------------------------------------------------------------
+Vector2 Enemy::ComputeShotAimPoint(Vector2 playerPos, Vector2 playerVelocity) const
+{
+    const int slot = m_shotCount % ENEMY1_PREDICT_CYCLE;
+    const bool predictive =
+        slot >= (ENEMY1_PREDICT_CYCLE - ENEMY1_PREDICT_IN_CYCLE);
+    if (!predictive)
+    {
+        return playerPos;
+    }
+
+    const float dist = std::hypot(playerPos.x - position.x,
+                                  playerPos.y - position.y);
+    float travelTime = dist / ENEMY_PROJ_SPEED;
+    if (travelTime > ENEMY1_AIM_MAX_PREDICT_TIME)
+    {
+        travelTime = ENEMY1_AIM_MAX_PREDICT_TIME;
+    }
+
+    Vector2 lead = { playerVelocity.x * travelTime,
+                     playerVelocity.y * travelTime };
+    const float leadLen = std::hypot(lead.x, lead.y);
+    if (leadLen > ENEMY1_AIM_MAX_LEAD)
+    {
+        const float s = ENEMY1_AIM_MAX_LEAD / leadLen;
+        lead.x *= s;
+        lead.y *= s;
+    }
+
+    return { playerPos.x + lead.x, playerPos.y + lead.y };
+}
+
 void Enemy::Draw() const
 {
     // Placeholder: red circle, clearly distinct from the cyan player ship
@@ -359,6 +431,8 @@ void Enemy::RespawnAt(Vector2 spawnPos)
     m_isChasing = false;
     m_health = ENEMY_MAX_HEALTH;
     m_cornerHolding = false;
+    m_retreatTimer = 0.0f; // fresh enemy: no lingering post-contact retreat
+    m_shotCount = 0;       // restart the targeting-mode cycle cleanly
 }
 
 float Enemy::DistanceTo(Vector2 worldPos) const

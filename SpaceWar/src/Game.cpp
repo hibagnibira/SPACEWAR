@@ -80,6 +80,8 @@ Game::Game(int screenWidth, int screenHeight)
     , m_testEnemy2({ 1050.0f, 1150.0f }) // inside world, away from player spawn
     , m_bomber({ 500.0f, 350.0f })       // upper-left world area, far from player
     , m_contactOwner(0)
+    , m_enemy1Enabled(true)
+    , m_enemy2Enabled(true)
     , m_enemyActivateTimer(0.0f)
     , m_enemy1RespawnTimer(ENEMY_RESPAWN_DELAY)
     , m_enemy2RespawnTimer(ENEMY_RESPAWN_DELAY)
@@ -181,19 +183,22 @@ void Game::Update(float dt)
         const bool interAvoids  = (m_contactOwner == 1);
 
         // 3d. Update test enemy (wander -> chase; destroyed enemies stay inert)
-        if (!m_testEnemy.IsDestroyed())
+        // Disabled enemies are skipped entirely — frozen, silent, harmless.
+        if (m_enemy1Enabled && !m_testEnemy.IsDestroyed())
         {
-            m_testEnemy.Update(dt, m_player.m_position, m_camera, m_worldWidth, m_worldHeight,
+            m_testEnemy.Update(dt, m_player.m_position, m_player.m_velocity, m_camera,
+                               m_worldWidth, m_worldHeight,
                                m_player.m_isAccelerating, m_player.m_isDead, enemyAvoids,
-                               m_testEnemy2.position, !m_testEnemy2.IsDestroyed());
+                               m_testEnemy2.position, m_enemy2Enabled && !m_testEnemy2.IsDestroyed());
 
-            // Enemy Type 1 firing: one plasma orb per shot, aimed at the
-            // player's position at fire time. Fixed trajectory — no homing.
+            // Enemy Type 1 firing: one plasma orb per shot. The enemy picks
+            // the aim point (alternating current-position / predictive);
+            // Game launches toward it. Fixed trajectory — no homing.
             if (m_testEnemy.m_shotRequested)
             {
                 m_testEnemy.m_shotRequested = false;
-                const float fdx = m_player.m_position.x - m_testEnemy.position.x;
-                const float fdy = m_player.m_position.y - m_testEnemy.position.y;
+                const float fdx = m_testEnemy.m_shotAimPoint.x - m_testEnemy.position.x;
+                const float fdy = m_testEnemy.m_shotAimPoint.y - m_testEnemy.position.y;
                 const float flen = std::hypot(fdx, fdy);
                 if (flen > 1.0f)
                 {
@@ -210,12 +215,12 @@ void Game::Update(float dt)
 
         // 3e. Update front interceptor (intercept ahead of player; same rules)
         const Vector2 playerFacing = { std::cos(m_player.m_rotation), std::sin(m_player.m_rotation) };
-        if (!m_testEnemy2.IsDestroyed())
+        if (m_enemy2Enabled && !m_testEnemy2.IsDestroyed())
         {
             m_testEnemy2.Update(dt, m_player.m_position, playerFacing, m_player.m_velocity, m_camera,
                                 m_worldWidth, m_worldHeight,
                                 m_player.m_isAccelerating, m_player.m_isDead, interAvoids,
-                                m_testEnemy.position, !m_testEnemy.IsDestroyed());
+                                m_testEnemy.position, m_enemy1Enabled && !m_testEnemy.IsDestroyed());
 
             // Enemy Type 2 firing: one plasma orb per shot, faster than
             // Type 1 with a longer-lived trail for high-speed readability.
@@ -284,6 +289,30 @@ void Game::Update(float dt)
         };
 
         m_bombs.emplace_back(m_bomber.position, target, BOMB_SPEED);
+    }
+
+    // Runtime enemy toggles: 1 = Enemy Type 1, 2 = Enemy Type 2.
+    // Disabling freezes the enemy completely (no update/draw/shoot/contact/
+    // respawn) and clears its transient combat state; re-enabling resumes it
+    // exactly where it was. Type 3 (Bomber) is intentionally unaffected.
+    if (IsKeyPressed(KEY_ONE))
+    {
+        m_enemy1Enabled = !m_enemy1Enabled;
+        if (!m_enemy1Enabled)
+        {
+            m_testEnemy.m_shotRequested = false;
+            m_testEnemy.m_retreatTimer = 0.0f;
+            if (m_contactOwner == 1) m_contactOwner = 0;
+        }
+    }
+    if (IsKeyPressed(KEY_TWO))
+    {
+        m_enemy2Enabled = !m_enemy2Enabled;
+        if (!m_enemy2Enabled)
+        {
+            m_testEnemy2.m_shotRequested = false;
+            if (m_contactOwner == 2) m_contactOwner = 0;
+        }
     }
 
     // Temporary debug damage (single press per hit, not per frame)
@@ -525,13 +554,13 @@ void Game::Draw()
     }
 
     // Test enemy (world space — moves correctly with the camera)
-    if (!m_testEnemy.IsDestroyed())
+    if (m_enemy1Enabled && !m_testEnemy.IsDestroyed())
     {
         m_testEnemy.Draw();
     }
 
     // Front interceptor (orange placeholder)
-    if (!m_testEnemy2.IsDestroyed())
+    if (m_enemy2Enabled && !m_testEnemy2.IsDestroyed())
     {
         m_testEnemy2.Draw();
     }
@@ -562,6 +591,15 @@ void Game::Draw()
     DrawText("SPACEWAR", 20, 20, 20, RAYWHITE);
     DrawFPS(m_screenWidth - 100, 20);
 
+    // Title banner: centered near the top of the window (screen space)
+    {
+        constexpr const char* titleText = "SPACEWAR - Work in progress";
+        constexpr int titleFontSize = 28;
+        const int titleWidth = MeasureText(titleText, titleFontSize);
+        DrawText(titleText, (m_screenWidth - titleWidth) / 2, 18,
+                 titleFontSize, GOLD);
+    }
+
     // HUD: score + per-type kill counters (screen space, top-right)
     DrawText(TextFormat("SCORE: %06d", m_score), m_screenWidth - 170, 116, 18, YELLOW);
     DrawText(TextFormat("T1: %d", m_t1Kills), m_screenWidth - 170, 142, 14, LIGHTGRAY);
@@ -587,6 +625,14 @@ void Game::Draw()
     {
         DrawText("R                - Respawn (temporary)",   20, 394, 14, YELLOW);
     }
+
+    // Enemy Type 1/2 runtime toggles + live state (updates on key press)
+    DrawText("1                 - Toggle Enemy Type 1",      20, 412, 14, GRAY);
+    DrawText(TextFormat("Type 1: %s", m_enemy1Enabled ? "ENABLED" : "DISABLED"),
+             20, 428, 14, m_enemy1Enabled ? GREEN : RED);
+    DrawText("2                 - Toggle Enemy Type 2",      20, 446, 14, GRAY);
+    DrawText(TextFormat("Type 2: %s", m_enemy2Enabled ? "ENABLED" : "DISABLED"),
+             20, 462, 14, m_enemy2Enabled ? GREEN : RED);
 
     // GAME OVER overlay — visible only while the player is dead
     if (m_player.m_isDead)
@@ -678,13 +724,13 @@ void Game::RepositionEnemiesInView()
     Vector2 pos;
 
     // Destroyed enemies are NOT revived or repositioned — they stay gone
-    if (!m_testEnemy.IsDestroyed() &&
+    if (m_enemy1Enabled && !m_testEnemy.IsDestroyed() &&
         TryFindEnemySpawnPos(viewCenter, used, pos))
     {
         m_testEnemy.ResetTo(pos);
         used.push_back(pos);
     }
-    if (!m_testEnemy2.IsDestroyed() &&
+    if (m_enemy2Enabled && !m_testEnemy2.IsDestroyed() &&
         TryFindEnemySpawnPos(viewCenter, used, pos))
     {
         m_testEnemy2.ResetTo(pos);
@@ -704,10 +750,11 @@ void Game::UpdateEnemyContacts()
         return;
     }
 
-    // Destroyed enemies cannot touch the player or hold the engagement
-    const bool touch1 = !m_testEnemy.IsDestroyed() &&
+    // Destroyed or runtime-disabled enemies cannot touch the player or
+    // hold the engagement (a disabled enemy also releases ownership).
+    const bool touch1 = m_enemy1Enabled && !m_testEnemy.IsDestroyed() &&
         m_testEnemy.Touches(m_player.m_position, SHIP_COLLISION_RADIUS);
-    const bool touch2 = !m_testEnemy2.IsDestroyed() &&
+    const bool touch2 = m_enemy2Enabled && !m_testEnemy2.IsDestroyed() &&
         m_testEnemy2.Touches(m_player.m_position, SHIP_COLLISION_RADIUS);
 
     // Acquire: first toucher wins when nobody owns contact
@@ -730,9 +777,14 @@ void Game::UpdateEnemyContacts()
     }
 
     // Contact damage through the player's general damage path
-    // (invulnerability prevents multi-hit during the same overlap)
+    // (invulnerability prevents multi-hit during the same overlap).
+    // Type 1 also gets a post-contact retreat flag so it withdraws after
+    // the bump instead of parking on the player — matching Type 2's
+    // transient-contact behavior. Type 2 needs no flag: its offset
+    // intercept point already carries it away after contact.
     if (touch1)
     {
+        m_testEnemy.m_retreatTimer = ENEMY_RETREAT_DURATION;
         m_player.TakeDamage(ENEMY_CONTACT_DAMAGE);
     }
     if (touch2)
@@ -766,13 +818,13 @@ void Game::CheckBulletEnemyHits()
         int hitKind = 0; // 0 = none, 1 = Type 1, 2 = Type 2
         float bestDist = 1.0e9f;
 
-        if (!m_testEnemy.IsDestroyed() &&
+        if (m_enemy1Enabled && !m_testEnemy.IsDestroyed() &&
             m_testEnemy.Touches(bulletCenter, BULLET_RADIUS))
         {
             hitKind = 1;
             bestDist = m_testEnemy.DistanceTo(bulletCenter);
         }
-        if (!m_testEnemy2.IsDestroyed() &&
+        if (m_enemy2Enabled && !m_testEnemy2.IsDestroyed() &&
             m_testEnemy2.Touches(bulletCenter, BULLET_RADIUS))
         {
             const float d = m_testEnemy2.DistanceTo(bulletCenter);
@@ -866,8 +918,9 @@ void Game::UpdateEnemyProjectiles(float dt)
 
 void Game::UpdateEnemyRespawns(float dt)
 {
-    // Type 1: countdown while destroyed, then respawn inside the view
-    if (m_testEnemy.IsDestroyed())
+    // Type 1: countdown while destroyed, then respawn inside the view.
+    // A disabled enemy's respawn clock is frozen — it resumes on re-enable.
+    if (m_enemy1Enabled && m_testEnemy.IsDestroyed())
     {
         m_enemy1RespawnTimer -= dt;
         if (m_enemy1RespawnTimer <= 0.0f)
@@ -896,8 +949,8 @@ void Game::UpdateEnemyRespawns(float dt)
         m_enemy1RespawnTimer = ENEMY_RESPAWN_DELAY; // re-arm for next death
     }
 
-    // Type 2: same rules
-    if (m_testEnemy2.IsDestroyed())
+    // Type 2: same rules (respawn also frozen while disabled)
+    if (m_enemy2Enabled && m_testEnemy2.IsDestroyed())
     {
         m_enemy2RespawnTimer -= dt;
         if (m_enemy2RespawnTimer <= 0.0f)

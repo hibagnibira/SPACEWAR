@@ -94,6 +94,12 @@ private:
     // m_contactOwner: 0 = none, 1 = Enemy Type 1, 2 = Enemy Type 2.
     int m_contactOwner;
 
+    // Runtime enable toggles (keys 1/2): a disabled enemy freezes in place,
+    // is not drawn, cannot shoot or deal contact damage, and is excluded
+    // from engagement, bullet hits, and respawning. Type 3 is unaffected.
+    bool m_enemy1Enabled;
+    bool m_enemy2Enabled;
+
     // Enemy activation delay (game start / player respawn) and per-enemy
     // respawn timers after destruction.
     float m_enemyActivateTimer;
