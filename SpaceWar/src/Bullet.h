@@ -46,4 +46,7 @@ public:
 
     bool IsExpired() const;
     Rectangle GetBounds() const;
+
+    // Marks the bullet for removal on the next expiry sweep (e.g. on hit)
+    void Destroy();
 };

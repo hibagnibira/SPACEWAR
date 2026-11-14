@@ -26,6 +26,28 @@ constexpr float HEALING_STONE_SPAWN_INTERVAL_LOW  = 3.0f;  // health <= 30%
 constexpr float HEALING_STONE_MIN_PLAYER_DISTANCE = 100.0f; // world units
 constexpr int   HEALING_STONE_MAX_SPAWN_ATTEMPTS  = 20;
 
+// Contact damage dealt by enemies (matches prototype: enemy contact = 10%)
+constexpr float ENEMY_CONTACT_DAMAGE = 10.0f;
+
+// ----------------------------------------------------------------------------
+// Enemy (re)spawn positioning — random spots inside the visible camera area
+// ----------------------------------------------------------------------------
+constexpr float ENEMY_SPAWN_MIN_PLAYER_DIST = 240.0f; // px from player
+constexpr float ENEMY_SPAWN_MIN_ENEMY_DIST  = 180.0f; // px between the two enemies
+constexpr float ENEMY_SPAWN_VIEW_MARGIN = 80.0f;      // world-edge inset for spawns
+constexpr int   ENEMY_SPAWN_MAX_ATTEMPTS = 30;
+
+// Damage dealt to an enemy per player bullet hit
+constexpr float ENEMY_BULLET_DAMAGE = 1.0f;
+
+// Enemy respawn after destruction + initial AI activation delay
+constexpr float ENEMY_RESPAWN_DELAY = 2.0f;     // seconds before a destroyed enemy returns
+constexpr float ENEMY_ACTIVATION_DELAY = 1.0f;  // seconds enemies wait before pursuing
+
+// Score rewards per enemy type (awarded once at destruction)
+constexpr int ENEMY1_KILL_SCORE = 100;
+constexpr int ENEMY2_KILL_SCORE = 200;
+
 Game::Game(int screenWidth, int screenHeight)
     : m_screenWidth(screenWidth)
     , m_screenHeight(screenHeight)
@@ -35,6 +57,14 @@ Game::Game(int screenWidth, int screenHeight)
     , m_camera{ 0 }
     , m_stoneSpawnTimer(0.0f)
     , m_testEnemy({ 1300.0f, 620.0f })  // just above initial view, inside world
+    , m_testEnemy2({ 1050.0f, 1150.0f }) // inside world, away from player spawn
+    , m_contactOwner(0)
+    , m_enemyActivateTimer(0.0f)
+    , m_enemy1RespawnTimer(ENEMY_RESPAWN_DELAY)
+    , m_enemy2RespawnTimer(ENEMY_RESPAWN_DELAY)
+    , m_score(0)
+    , m_t1Kills(0)
+    , m_t2Kills(0)
 {
     // Deterministic starfield generation (stable across runs)
     constexpr int STAR_COUNT = 400;
@@ -71,6 +101,12 @@ void Game::Init()
                                  static_cast<float>(m_screenHeight) / 2.0f }; // Center on screen
     m_camera.rotation = 0.0f; // Fixed 0 rotation
     m_camera.zoom = 1.5f; // Fixed 1.5x zoom
+
+    // Place both enemies at random positions inside the visible camera area
+    RepositionEnemiesInView();
+
+    // Enemies wait briefly before starting their AI pursuit
+    m_enemyActivateTimer = ENEMY_ACTIVATION_DELAY;
 }
 
 void Game::Update(float dt)
@@ -90,12 +126,50 @@ void Game::Update(float dt)
     // 3. Update projectiles
     UpdateBullets(dt);
 
+    // 3a. Player bullets vs enemies (hit -> damage + bullet removal)
+    CheckBulletEnemyHits();
+
     // 3b. Update healing stones (spawn timer, lifetime, collection)
     UpdateHealingStones(dt);
 
-    // 3c. Update test enemy (wander -> chase; Game supplies player state via friendship)
-    m_testEnemy.Update(dt, m_player.m_position, m_camera, m_worldWidth, m_worldHeight,
-                       m_player.m_isAccelerating, m_player.m_isDead);
+    // 3c. Activation delay: at game start and after player respawn, enemies
+    // hold position inside the view for ENEMY_ACTIVATION_DELAY seconds
+    // before their AI pursuit begins. Bullet hits still work during this.
+    if (m_enemyActivateTimer > 0.0f)
+    {
+        m_enemyActivateTimer -= dt;
+    }
+    else
+    {
+        // Exclusive contact engagement: the enemy NOT owning contact must
+        // keep a safe distance from the player this frame.
+        const bool enemyAvoids  = (m_contactOwner == 2);
+        const bool interAvoids  = (m_contactOwner == 1);
+
+        // 3d. Update test enemy (wander -> chase; destroyed enemies stay inert)
+        if (!m_testEnemy.IsDestroyed())
+        {
+            m_testEnemy.Update(dt, m_player.m_position, m_camera, m_worldWidth, m_worldHeight,
+                               m_player.m_isAccelerating, m_player.m_isDead, enemyAvoids,
+                               m_testEnemy2.position, !m_testEnemy2.IsDestroyed());
+        }
+
+        // 3e. Update front interceptor (intercept ahead of player; same rules)
+        const Vector2 playerFacing = { std::cos(m_player.m_rotation), std::sin(m_player.m_rotation) };
+        if (!m_testEnemy2.IsDestroyed())
+        {
+            m_testEnemy2.Update(dt, m_player.m_position, playerFacing, m_player.m_velocity, m_camera,
+                                m_worldWidth, m_worldHeight,
+                                m_player.m_isAccelerating, m_player.m_isDead, interAvoids,
+                                m_testEnemy.position, !m_testEnemy.IsDestroyed());
+        }
+
+        // 3f. Contact engagement ownership + contact damage for both enemies
+        UpdateEnemyContacts();
+    }
+
+    // 3g. Respawn destroyed enemies after ENEMY_RESPAWN_DELAY seconds
+    UpdateEnemyRespawns(dt);
 
     // Temporary debug damage (single press per hit, not per frame)
     if (IsKeyPressed(DEBUG_DAMAGE_KEY))
@@ -107,6 +181,12 @@ void Game::Update(float dt)
     if (m_player.m_isDead && IsKeyPressed(KEY_R))
     {
         m_player.Respawn(m_camera);
+        // Reposition both enemies inside the (incoming) camera view,
+        // release any stale contact engagement, and restart the
+        // activation delay before they resume pursuing.
+        RepositionEnemiesInView();
+        m_contactOwner = 0;
+        m_enemyActivateTimer = ENEMY_ACTIVATION_DELAY;
     }
 
     // 4. Smoothly follow player's new position
@@ -330,7 +410,16 @@ void Game::Draw()
     }
 
     // Test enemy (world space — moves correctly with the camera)
-    m_testEnemy.Draw();
+    if (!m_testEnemy.IsDestroyed())
+    {
+        m_testEnemy.Draw();
+    }
+
+    // Front interceptor (orange placeholder)
+    if (!m_testEnemy2.IsDestroyed())
+    {
+        m_testEnemy2.Draw();
+    }
 
     EndMode2D();
 
@@ -339,6 +428,11 @@ void Game::Draw()
     // --------------------------------------------------------------------
     DrawText("SPACEWAR", 20, 20, 20, RAYWHITE);
     DrawFPS(m_screenWidth - 100, 20);
+
+    // HUD: score + per-type kill counters (screen space, top-right)
+    DrawText(TextFormat("SCORE: %06d", m_score), m_screenWidth - 170, 116, 18, YELLOW);
+    DrawText(TextFormat("T1: %d", m_t1Kills), m_screenWidth - 170, 142, 14, LIGHTGRAY);
+    DrawText(TextFormat("T2: %d", m_t2Kills), m_screenWidth - 170, 162, 14, LIGHTGRAY);
 
     // HUD: player health bar (fixed screen position, drawn by Player)
     m_player.DrawHealthBar();
@@ -374,4 +468,276 @@ void Game::Draw()
     }
 
     EndDrawing();
+}
+
+// ----------------------------------------------------------------------------
+// Enemy (Re)spawn Positioning
+// ----------------------------------------------------------------------------
+
+// Finds a random spawn position inside the camera view (centered on
+// viewCenter) intersected with world bounds. Avoids the player and any
+// positions in avoidPos by at least ENEMY_SPAWN_MIN_* distances.
+bool Game::TryFindEnemySpawnPos(Vector2 viewCenter, const std::vector<Vector2>& avoidPos,
+                                Vector2& outPos) const
+{
+    // camera.offset = half the screen size; /zoom gives visible half-extents
+    const float halfViewW = m_camera.offset.x / m_camera.zoom;
+    const float halfViewH = m_camera.offset.y / m_camera.zoom;
+
+    const float minX = std::max(viewCenter.x - halfViewW, ENEMY_SPAWN_VIEW_MARGIN);
+    const float maxX = std::min(viewCenter.x + halfViewW, m_worldWidth - ENEMY_SPAWN_VIEW_MARGIN);
+    const float minY = std::max(viewCenter.y - halfViewH, ENEMY_SPAWN_VIEW_MARGIN);
+    const float maxY = std::min(viewCenter.y + halfViewH, m_worldHeight - ENEMY_SPAWN_VIEW_MARGIN);
+
+    if (maxX <= minX || maxY <= minY)
+    {
+        return false;
+    }
+
+    const float minPlayerDistSq = ENEMY_SPAWN_MIN_PLAYER_DIST * ENEMY_SPAWN_MIN_PLAYER_DIST;
+    const float minEnemyDistSq  = ENEMY_SPAWN_MIN_ENEMY_DIST * ENEMY_SPAWN_MIN_ENEMY_DIST;
+
+    for (int attempt = 0; attempt < ENEMY_SPAWN_MAX_ATTEMPTS; ++attempt)
+    {
+        const float rx = static_cast<float>(GetRandomValue(0, 1000000)) / 1000000.0f;
+        const float ry = static_cast<float>(GetRandomValue(0, 1000000)) / 1000000.0f;
+
+        const float x = minX + rx * (maxX - minX);
+        const float y = minY + ry * (maxY - minY);
+
+        const float pdx = x - m_player.m_position.x;
+        const float pdy = y - m_player.m_position.y;
+        if (pdx * pdx + pdy * pdy < minPlayerDistSq)
+        {
+            continue;
+        }
+
+        bool tooClose = false;
+        for (const Vector2& avoid : avoidPos)
+        {
+            const float adx = x - avoid.x;
+            const float ady = y - avoid.y;
+            if (adx * adx + ady * ady < minEnemyDistSq)
+            {
+                tooClose = true;
+                break;
+            }
+        }
+        if (tooClose)
+        {
+            continue;
+        }
+
+        outPos = { x, y };
+        return true;
+    }
+
+    return false;
+}
+
+void Game::RepositionEnemiesInView()
+{
+    // Reposition the EXISTING two enemies at independent random positions
+    // inside the visible camera area. Uses the player's position as the
+    // view center — the camera converges there (at Init they coincide).
+    const Vector2 viewCenter = m_player.m_position;
+    std::vector<Vector2> used;
+    Vector2 pos;
+
+    // Destroyed enemies are NOT revived or repositioned — they stay gone
+    if (!m_testEnemy.IsDestroyed() &&
+        TryFindEnemySpawnPos(viewCenter, used, pos))
+    {
+        m_testEnemy.ResetTo(pos);
+        used.push_back(pos);
+    }
+    if (!m_testEnemy2.IsDestroyed() &&
+        TryFindEnemySpawnPos(viewCenter, used, pos))
+    {
+        m_testEnemy2.ResetTo(pos);
+        used.push_back(pos);
+    }
+}
+
+// ----------------------------------------------------------------------------
+// Exclusive Contact Engagement + Contact Damage
+// ----------------------------------------------------------------------------
+
+void Game::UpdateEnemyContacts()
+{
+    if (m_player.m_isDead)
+    {
+        m_contactOwner = 0; // release lock while dead
+        return;
+    }
+
+    // Destroyed enemies cannot touch the player or hold the engagement
+    const bool touch1 = !m_testEnemy.IsDestroyed() &&
+        m_testEnemy.Touches(m_player.m_position, SHIP_COLLISION_RADIUS);
+    const bool touch2 = !m_testEnemy2.IsDestroyed() &&
+        m_testEnemy2.Touches(m_player.m_position, SHIP_COLLISION_RADIUS);
+
+    // Acquire: first toucher wins when nobody owns contact
+    if (m_contactOwner == 0)
+    {
+        if (touch1)
+        {
+            m_contactOwner = 1;
+        }
+        else if (touch2)
+        {
+            m_contactOwner = 2;
+        }
+    }
+    // Release: owner stopped touching -> engagement ends
+    else if ((m_contactOwner == 1 && !touch1) ||
+             (m_contactOwner == 2 && !touch2))
+    {
+        m_contactOwner = 0;
+    }
+
+    // Contact damage through the player's general damage path
+    // (invulnerability prevents multi-hit during the same overlap)
+    if (touch1)
+    {
+        m_player.TakeDamage(ENEMY_CONTACT_DAMAGE);
+    }
+    if (touch2)
+    {
+        m_player.TakeDamage(ENEMY_CONTACT_DAMAGE);
+    }
+}
+
+// ----------------------------------------------------------------------------
+// Bullet vs Enemy Combat
+// ----------------------------------------------------------------------------
+
+void Game::CheckBulletEnemyHits()
+{
+    for (Bullet& bullet : m_bullets)
+    {
+        if (bullet.IsExpired())
+        {
+            continue;
+        }
+
+        // Bullet world center from its collision bounds (no position getter)
+        const Rectangle bounds = bullet.GetBounds();
+        const Vector2 bulletCenter = { bounds.x + bounds.width * 0.5f,
+                                       bounds.y + bounds.height * 0.5f };
+
+        // Find which enemy this bullet actually overlaps. When both enemies
+        // overlap the bullet (they can overlap each other), the CLOSEST one
+        // takes the hit — otherwise Type 1 would always soak hits meant for
+        // Type 2 and kills would be misattributed.
+        int hitKind = 0; // 0 = none, 1 = Type 1, 2 = Type 2
+        float bestDist = 1.0e9f;
+
+        if (!m_testEnemy.IsDestroyed() &&
+            m_testEnemy.Touches(bulletCenter, BULLET_RADIUS))
+        {
+            hitKind = 1;
+            bestDist = m_testEnemy.DistanceTo(bulletCenter);
+        }
+        if (!m_testEnemy2.IsDestroyed() &&
+            m_testEnemy2.Touches(bulletCenter, BULLET_RADIUS))
+        {
+            const float d = m_testEnemy2.DistanceTo(bulletCenter);
+            if (d < bestDist)
+            {
+                hitKind = 2;
+                bestDist = d;
+            }
+        }
+
+        // A bullet damages at most ONE enemy, then is destroyed
+        if (hitKind == 1)
+        {
+            m_testEnemy.TakeDamage(ENEMY_BULLET_DAMAGE);
+            bullet.Destroy();
+            // Killing blow: award score + kill counter exactly once
+            // (destroyed enemies are skipped by future hit checks)
+            if (m_testEnemy.IsDestroyed())
+            {
+                m_score += ENEMY1_KILL_SCORE;
+                ++m_t1Kills;
+            }
+        }
+        else if (hitKind == 2)
+        {
+            m_testEnemy2.TakeDamage(ENEMY_BULLET_DAMAGE);
+            bullet.Destroy();
+            if (m_testEnemy2.IsDestroyed())
+            {
+                m_score += ENEMY2_KILL_SCORE;
+                ++m_t2Kills;
+            }
+        }
+    }
+}
+
+// ----------------------------------------------------------------------------
+// Enemy Respawn After Destruction
+// ----------------------------------------------------------------------------
+
+void Game::UpdateEnemyRespawns(float dt)
+{
+    // Type 1: countdown while destroyed, then respawn inside the view
+    if (m_testEnemy.IsDestroyed())
+    {
+        m_enemy1RespawnTimer -= dt;
+        if (m_enemy1RespawnTimer <= 0.0f)
+        {
+            for (int attempt = 0; attempt < 10; ++attempt)
+            {
+                Vector2 pos;
+                if (!TryFindEnemySpawnPos(m_camera.target, {}, pos))
+                {
+                    break; // no valid spot — retry next frame
+                }
+                // Keep separation from the other enemy when it's alive
+                if (!m_testEnemy2.IsDestroyed() &&
+                    m_testEnemy2.DistanceTo(pos) < ENEMY_SPAWN_MIN_ENEMY_DIST)
+                {
+                    continue;
+                }
+                m_testEnemy.RespawnAt(pos);
+                m_enemy1RespawnTimer = ENEMY_RESPAWN_DELAY;
+                break;
+            }
+        }
+    }
+    else
+    {
+        m_enemy1RespawnTimer = ENEMY_RESPAWN_DELAY; // re-arm for next death
+    }
+
+    // Type 2: same rules
+    if (m_testEnemy2.IsDestroyed())
+    {
+        m_enemy2RespawnTimer -= dt;
+        if (m_enemy2RespawnTimer <= 0.0f)
+        {
+            for (int attempt = 0; attempt < 10; ++attempt)
+            {
+                Vector2 pos;
+                if (!TryFindEnemySpawnPos(m_camera.target, {}, pos))
+                {
+                    break;
+                }
+                if (!m_testEnemy.IsDestroyed() &&
+                    m_testEnemy.DistanceTo(pos) < ENEMY_SPAWN_MIN_ENEMY_DIST)
+                {
+                    continue;
+                }
+                m_testEnemy2.RespawnAt(pos);
+                m_enemy2RespawnTimer = ENEMY_RESPAWN_DELAY;
+                break;
+            }
+        }
+    }
+    else
+    {
+        m_enemy2RespawnTimer = ENEMY_RESPAWN_DELAY;
+    }
 }

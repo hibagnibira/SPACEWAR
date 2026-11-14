@@ -44,3 +44,9 @@ Rectangle Bullet::GetBounds() const
                       BULLET_RADIUS * 2.0f,
                       BULLET_RADIUS * 2.0f };
 }
+
+void Bullet::Destroy()
+{
+    // Force expiry so UpdateBullets removes it on the next sweep
+    lifetimeRemaining = 0.0f;
+}

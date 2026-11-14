@@ -42,6 +42,7 @@
 #include "AssetManager.h"
 #include "Bullet.h"
 #include "HealingStone.h"
+#include "EnemyInterceptor.h"
 
 enum class GameState
 {
@@ -80,7 +81,23 @@ private:
     std::vector<Bullet> m_bullets; // Active player projectiles
     std::vector<HealingStone> m_healingStones; // Active healing pickups
     float m_stoneSpawnTimer;                   // Countdown to next spawn attempt
-    Enemy m_testEnemy; // Milestone 1: single stationary test enemy
+    Enemy m_testEnemy; // Milestone 1: single test enemy (rear chaser)
+    EnemyInterceptor m_testEnemy2; // Front interceptor test enemy
+
+    // Exclusive contact engagement: only ONE enemy may overlap the player.
+    // m_contactOwner: 0 = none, 1 = Enemy Type 1, 2 = Enemy Type 2.
+    int m_contactOwner;
+
+    // Enemy activation delay (game start / player respawn) and per-enemy
+    // respawn timers after destruction.
+    float m_enemyActivateTimer;
+    float m_enemy1RespawnTimer;
+    float m_enemy2RespawnTimer;
+
+    // Scoring: total score + per-type kill counters (persist across respawns)
+    int m_score;
+    int m_t1Kills;
+    int m_t2Kills;
 
     // Internal helper to smoothly move camera.target toward m_player.m_position
     void UpdateCamera(float dt);
@@ -93,6 +110,14 @@ private:
     void UpdateHealingStones(float dt);
     void TrySpawnHealingStone();
     bool TryFindStoneSpawnPos(Vector2& outPos) const;
+
+    // Enemy spawn repositioning + exclusive contact engagement
+    void RepositionEnemiesInView();
+    bool TryFindEnemySpawnPos(Vector2 viewCenter, const std::vector<Vector2>& avoidPos,
+                              Vector2& outPos) const;
+    void UpdateEnemyContacts();
+    void CheckBulletEnemyHits();
+    void UpdateEnemyRespawns(float dt);
 
 public:
     Game(int screenWidth = 1280, int screenHeight = 720);
