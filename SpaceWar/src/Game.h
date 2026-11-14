@@ -44,6 +44,8 @@
 #include "HealingStone.h"
 #include "EnemyInterceptor.h"
 #include "EnemyProjectile.h"
+#include "EnemyBomber.h"
+#include "Bomb.h"
 
 enum class GameState
 {
@@ -81,10 +83,12 @@ private:
     std::vector<Star> m_stars;
     std::vector<Bullet> m_bullets; // Active player projectiles
     std::vector<EnemyProjectile> m_enemyProjectiles; // Active enemy shots
+    std::vector<Bomb> m_bombs; // Bomber-launched bombs (independent of Bomber)
     std::vector<HealingStone> m_healingStones; // Active healing pickups
     float m_stoneSpawnTimer;                   // Countdown to next spawn attempt
     Enemy m_testEnemy; // Milestone 1: single test enemy (rear chaser)
     EnemyInterceptor m_testEnemy2; // Front interceptor test enemy
+    EnemyBomber m_bomber; // Type 3: slow world-wide wanderer (Phase 1)
 
     // Exclusive contact engagement: only ONE enemy may overlap the player.
     // m_contactOwner: 0 = none, 1 = Enemy Type 1, 2 = Enemy Type 2.
@@ -95,6 +99,7 @@ private:
     float m_enemyActivateTimer;
     float m_enemy1RespawnTimer;
     float m_enemy2RespawnTimer;
+    float m_bomberRespawnTimer; // Bomber (Type 3) respawn countdown
 
     // Scoring: total score + per-type kill counters (persist across respawns)
     int m_score;
@@ -108,6 +113,7 @@ private:
     void SpawnPlayerBullet();
     void UpdateBullets(float dt);
     void UpdateEnemyProjectiles(float dt);
+    void UpdateBombs(float dt);
 
     // Healing stone management
     void UpdateHealingStones(float dt);
@@ -121,6 +127,8 @@ private:
     void UpdateEnemyContacts();
     void CheckBulletEnemyHits();
     void UpdateEnemyRespawns(float dt);
+    void UpdateBomberRespawn(float dt);
+    bool TryFindBomberSpawnPos(Vector2& outPos) const;
 
 public:
     Game(int screenWidth = 1280, int screenHeight = 720);

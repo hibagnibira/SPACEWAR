@@ -32,6 +32,9 @@ constexpr float ENEMY_CONTACT_DAMAGE = 10.0f;
 // Enemy projectile damage per source type + visual identity (enemy colors)
 constexpr float ENEMY1_PROJ_DAMAGE = 2.0f;
 constexpr float ENEMY2_PROJ_DAMAGE = 5.0f;
+// Bomber bomb explosion: AoE hit at detonation, applied once per bomb.
+// Radius lives in Bomb.h (BOMB_EXPLOSION_RADIUS, shared with warning).
+constexpr float BOMB_EXPLOSION_DAMAGE = 20.0f;
 constexpr Color ENEMY1_PROJ_COLOR = { 230, 60, 60, 255 };   // Type 1 red
 constexpr Color ENEMY2_PROJ_COLOR = { 255, 150, 50, 255 };  // Type 2 orange
 
@@ -46,13 +49,24 @@ constexpr int   ENEMY_SPAWN_MAX_ATTEMPTS = 30;
 // Damage dealt to an enemy per player bullet hit
 constexpr float ENEMY_BULLET_DAMAGE = 1.0f;
 
+// ----------------------------------------------------------------------------
+// Bomber (Type 3) initial spawn — one instance ANYWHERE in the world.
+// Unlike Types 1/2 it is NOT restricted to the camera view: it may spawn
+// far off-screen and is discovered by exploration.
+// ----------------------------------------------------------------------------
+constexpr float BOMBER_SPAWN_INSET = 80.0f;        // world-edge margin for spawn point
+constexpr float BOMBER_MIN_PLAYER_DIST = 300.0f;   // never spawn on/near the player
+constexpr int   BOMBER_SPAWN_MAX_ATTEMPTS = 40;
+
 // Enemy respawn after destruction + initial AI activation delay
 constexpr float ENEMY_RESPAWN_DELAY = 2.0f;     // seconds before a destroyed enemy returns
+constexpr float BOMBER_RESPAWN_DELAY = 5.0f;    // seconds before a destroyed Bomber returns
 constexpr float ENEMY_ACTIVATION_DELAY = 1.0f;  // seconds enemies wait before pursuing
 
 // Score rewards per enemy type (awarded once at destruction)
 constexpr int ENEMY1_KILL_SCORE = 100;
 constexpr int ENEMY2_KILL_SCORE = 200;
+constexpr int ENEMY3_KILL_SCORE = 300; // Bomber: substantial bonus, above Types 1/2
 
 Game::Game(int screenWidth, int screenHeight)
     : m_screenWidth(screenWidth)
@@ -64,10 +78,12 @@ Game::Game(int screenWidth, int screenHeight)
     , m_stoneSpawnTimer(0.0f)
     , m_testEnemy({ 1300.0f, 620.0f })  // just above initial view, inside world
     , m_testEnemy2({ 1050.0f, 1150.0f }) // inside world, away from player spawn
+    , m_bomber({ 500.0f, 350.0f })       // upper-left world area, far from player
     , m_contactOwner(0)
     , m_enemyActivateTimer(0.0f)
     , m_enemy1RespawnTimer(ENEMY_RESPAWN_DELAY)
     , m_enemy2RespawnTimer(ENEMY_RESPAWN_DELAY)
+    , m_bomberRespawnTimer(BOMBER_RESPAWN_DELAY)
     , m_score(0)
     , m_t1Kills(0)
     , m_t2Kills(0)
@@ -110,6 +126,18 @@ void Game::Init()
 
     // Place both enemies at random positions inside the visible camera area
     RepositionEnemiesInView();
+
+    // Bomber (Type 3): exactly one instance at a random WORLD position —
+    // anywhere in the arena including off-camera, never on the player.
+    // If no valid spot is found (practically impossible), the constructor
+    // position is kept as a safe fallback.
+    {
+        Vector2 bomberPos;
+        if (TryFindBomberSpawnPos(bomberPos))
+        {
+            m_bomber.ResetTo(bomberPos);
+        }
+    }
 
     // Enemies wait briefly before starting their AI pursuit
     m_enemyActivateTimer = ENEMY_ACTIVATION_DELAY;
@@ -217,8 +245,46 @@ void Game::Update(float dt)
     // 3g. Respawn destroyed enemies after ENEMY_RESPAWN_DELAY seconds
     UpdateEnemyRespawns(dt);
 
+    // 3g2. Bomber respawn after BOMBER_RESPAWN_DELAY seconds
+    UpdateBomberRespawn(dt);
+
+    // 3g3. Bomber bombs: fly, warn, explode, then finish safely
+    UpdateBombs(dt);
+
     // 3h. Enemy projectiles: move, trail, expire, and damage the player
     UpdateEnemyProjectiles(dt);
+
+    // 3i. Bomber: always-active slow wander — no camera/activation gating,
+    // no chasing; it functions anywhere in the world, even off-screen.
+    m_bomber.Update(dt, m_player.m_position, m_worldWidth, m_worldHeight,
+                    m_player.m_isDead);
+
+    // 3i2. Bomber attack: the Bomber flags a launch; Game computes a target
+    // clamped inside the VISIBLE camera area ∩ world bounds and spawns the
+    // Bomb. The bomb then lives independently in m_bombs — destroying the
+    // Bomber never affects an in-flight bomb.
+    if (!m_bomber.IsDestroyed() && m_bomber.m_bombRequested)
+    {
+        m_bomber.m_bombRequested = false;
+
+        // Visible world rectangle (same formula used for enemy confinement):
+        // camera.offset = half screen size; /zoom = visible half-extents.
+        const float halfViewW = m_camera.offset.x / m_camera.zoom;
+        const float halfViewH = m_camera.offset.y / m_camera.zoom;
+        const float viewMinX = std::max(m_camera.target.x - halfViewW, 0.0f);
+        const float viewMaxX = std::min(m_camera.target.x + halfViewW, m_worldWidth);
+        const float viewMinY = std::max(m_camera.target.y - halfViewH, 0.0f);
+        const float viewMaxY = std::min(m_camera.target.y + halfViewH, m_worldHeight);
+
+        // Target = player's position clamped into the visible area — the
+        // player is normally at view center, so this is a safety clamp.
+        const Vector2 target = {
+            std::max(viewMinX, std::min(m_player.m_position.x, viewMaxX)),
+            std::max(viewMinY, std::min(m_player.m_position.y, viewMaxY))
+        };
+
+        m_bombs.emplace_back(m_bomber.position, target, BOMB_SPEED);
+    }
 
     // Temporary debug damage (single press per hit, not per frame)
     if (IsKeyPressed(DEBUG_DAMAGE_KEY))
@@ -470,10 +536,22 @@ void Game::Draw()
         m_testEnemy2.Draw();
     }
 
+    // Bomber (purple triangle placeholder)
+    if (!m_bomber.IsDestroyed())
+    {
+        m_bomber.Draw();
+    }
+
     // Enemy projectiles (world space — trails + heads)
     for (const EnemyProjectile& proj : m_enemyProjectiles)
     {
         proj.Draw();
+    }
+
+    // Bomber bombs (world space — glowing orbs in flight)
+    for (const Bomb& bomb : m_bombs)
+    {
+        bomb.Draw();
     }
 
     EndMode2D();
@@ -704,6 +782,18 @@ void Game::CheckBulletEnemyHits()
                 bestDist = d;
             }
         }
+        // Bomber is a valid bullet target too (hitKind 3); like the others
+        // it takes damage, and a killing blow awards the Type 3 bonus.
+        if (!m_bomber.IsDestroyed() &&
+            m_bomber.Touches(bulletCenter, BULLET_RADIUS))
+        {
+            const float d = m_bomber.DistanceTo(bulletCenter);
+            if (d < bestDist)
+            {
+                hitKind = 3;
+                bestDist = d;
+            }
+        }
 
         // A bullet damages at most ONE enemy, then is destroyed
         if (hitKind == 1)
@@ -726,6 +816,17 @@ void Game::CheckBulletEnemyHits()
             {
                 m_score += ENEMY2_KILL_SCORE;
                 ++m_t2Kills;
+            }
+        }
+        else if (hitKind == 3)
+        {
+            m_bomber.TakeDamage(ENEMY_BULLET_DAMAGE);
+            bullet.Destroy();
+            // Killing blow: award the Bomber bonus exactly once
+            // (destroyed enemies are skipped by future hit checks)
+            if (m_bomber.IsDestroyed())
+            {
+                m_score += ENEMY3_KILL_SCORE;
             }
         }
     }
@@ -823,4 +924,94 @@ void Game::UpdateEnemyRespawns(float dt)
     {
         m_enemy2RespawnTimer = ENEMY_RESPAWN_DELAY;
     }
+}
+
+// ----------------------------------------------------------------------------
+// Bomber (Type 3) Spawn & Respawn
+// ----------------------------------------------------------------------------
+
+// Finds a random spawn position ANYWHERE inside the world bounds (inset by
+// BOMBER_SPAWN_INSET), at least BOMBER_MIN_PLAYER_DIST from the player.
+// Unlike Types 1/2 there is no camera-view restriction — the Bomber is
+// meant to be discovered by exploration, not spawned on-screen.
+bool Game::TryFindBomberSpawnPos(Vector2& outPos) const
+{
+    const float minX = BOMBER_SPAWN_INSET;
+    const float minY = BOMBER_SPAWN_INSET;
+    const float maxX = m_worldWidth - BOMBER_SPAWN_INSET;
+    const float maxY = m_worldHeight - BOMBER_SPAWN_INSET;
+
+    const float minPlayerDistSq = BOMBER_MIN_PLAYER_DIST * BOMBER_MIN_PLAYER_DIST;
+
+    for (int attempt = 0; attempt < BOMBER_SPAWN_MAX_ATTEMPTS; ++attempt)
+    {
+        const float rx = static_cast<float>(GetRandomValue(0, 1000000)) / 1000000.0f;
+        const float ry = static_cast<float>(GetRandomValue(0, 1000000)) / 1000000.0f;
+
+        const float x = minX + rx * (maxX - minX);
+        const float y = minY + ry * (maxY - minY);
+
+        const float dx = x - m_player.m_position.x;
+        const float dy = y - m_player.m_position.y;
+        if (dx * dx + dy * dy >= minPlayerDistSq)
+        {
+            outPos = { x, y };
+            return true;
+        }
+    }
+
+    return false;
+}
+
+void Game::UpdateBomberRespawn(float dt)
+{
+    // Same lifecycle pattern as Types 1/2, but the replacement spawns at a
+    // random WORLD position (not the camera view) after the longer delay.
+    if (m_bomber.IsDestroyed())
+    {
+        m_bomberRespawnTimer -= dt;
+        if (m_bomberRespawnTimer <= 0.0f)
+        {
+            for (int attempt = 0; attempt < 10; ++attempt)
+            {
+                Vector2 pos;
+                if (!TryFindBomberSpawnPos(pos))
+                {
+                    break; // no valid spot — retry next frame
+                }
+                m_bomber.RespawnAt(pos);
+                m_bomberRespawnTimer = BOMBER_RESPAWN_DELAY;
+                break;
+            }
+        }
+    }
+    else
+    {
+        m_bomberRespawnTimer = BOMBER_RESPAWN_DELAY; // re-arm for next death
+    }
+}
+
+void Game::UpdateBombs(float dt)
+{
+    // Bombs are independent entities: they keep flying toward their locked
+    // targets even if the Bomber that launched them is destroyed.
+    for (Bomb& bomb : m_bombs)
+    {
+        bomb.Update(dt);
+
+        // Detonation: the bomb flags its explosion exactly once. Game owns
+        // the blast check — if the player is inside the radius AT THAT
+        // MOMENT, apply damage through the existing TakeDamage path
+        // (invulnerability/death rules stay inside Player). No damage
+        // during flight, warning, or the explosion animation itself.
+        if (bomb.ConsumeDetonation() && bomb.IsInsideBlast(m_player.m_position))
+        {
+            m_player.TakeDamage(BOMB_EXPLOSION_DAMAGE);
+        }
+    }
+
+    // Remove finished bombs (explosion animation complete or lifetime expired)
+    m_bombs.erase(std::remove_if(m_bombs.begin(), m_bombs.end(),
+        [](const Bomb& bomb) { return bomb.IsFinished(); }),
+        m_bombs.end());
 }
