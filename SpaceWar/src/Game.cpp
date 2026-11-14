@@ -29,6 +29,12 @@ constexpr int   HEALING_STONE_MAX_SPAWN_ATTEMPTS  = 20;
 // Contact damage dealt by enemies (matches prototype: enemy contact = 10%)
 constexpr float ENEMY_CONTACT_DAMAGE = 10.0f;
 
+// Enemy projectile damage per source type + visual identity (enemy colors)
+constexpr float ENEMY1_PROJ_DAMAGE = 2.0f;
+constexpr float ENEMY2_PROJ_DAMAGE = 5.0f;
+constexpr Color ENEMY1_PROJ_COLOR = { 230, 60, 60, 255 };   // Type 1 red
+constexpr Color ENEMY2_PROJ_COLOR = { 255, 150, 50, 255 };  // Type 2 orange
+
 // ----------------------------------------------------------------------------
 // Enemy (re)spawn positioning — random spots inside the visible camera area
 // ----------------------------------------------------------------------------
@@ -152,6 +158,26 @@ void Game::Update(float dt)
             m_testEnemy.Update(dt, m_player.m_position, m_camera, m_worldWidth, m_worldHeight,
                                m_player.m_isAccelerating, m_player.m_isDead, enemyAvoids,
                                m_testEnemy2.position, !m_testEnemy2.IsDestroyed());
+
+            // Enemy Type 1 firing: one plasma orb per shot, aimed at the
+            // player's position at fire time. Fixed trajectory — no homing.
+            if (m_testEnemy.m_shotRequested)
+            {
+                m_testEnemy.m_shotRequested = false;
+                const float fdx = m_player.m_position.x - m_testEnemy.position.x;
+                const float fdy = m_player.m_position.y - m_testEnemy.position.y;
+                const float flen = std::hypot(fdx, fdy);
+                if (flen > 1.0f)
+                {
+                    const Vector2 dir = { fdx / flen, fdy / flen };
+                    const Vector2 spawnPos = { m_testEnemy.position.x + dir.x * 24.0f,
+                                               m_testEnemy.position.y + dir.y * 24.0f };
+                    const Vector2 velocity = { dir.x * ENEMY_PROJ_SPEED, dir.y * ENEMY_PROJ_SPEED };
+                    m_enemyProjectiles.emplace_back(spawnPos, velocity,
+                                                    ENEMY1_PROJ_COLOR, ENEMY1_PROJ_DAMAGE,
+                                                    ENEMY_PROJ_TRAIL_SCALE);
+                }
+            }
         }
 
         // 3e. Update front interceptor (intercept ahead of player; same rules)
@@ -162,6 +188,26 @@ void Game::Update(float dt)
                                 m_worldWidth, m_worldHeight,
                                 m_player.m_isAccelerating, m_player.m_isDead, interAvoids,
                                 m_testEnemy.position, !m_testEnemy.IsDestroyed());
+
+            // Enemy Type 2 firing: one plasma orb per shot, faster than
+            // Type 1 with a longer-lived trail for high-speed readability.
+            if (m_testEnemy2.m_shotRequested)
+            {
+                m_testEnemy2.m_shotRequested = false;
+                const float fdx = m_player.m_position.x - m_testEnemy2.position.x;
+                const float fdy = m_player.m_position.y - m_testEnemy2.position.y;
+                const float flen = std::hypot(fdx, fdy);
+                if (flen > 1.0f)
+                {
+                    const Vector2 dir = { fdx / flen, fdy / flen };
+                    const Vector2 spawnPos = { m_testEnemy2.position.x + dir.x * 24.0f,
+                                               m_testEnemy2.position.y + dir.y * 24.0f };
+                    const Vector2 velocity = { dir.x * ENEMY2_PROJ_SPEED, dir.y * ENEMY2_PROJ_SPEED };
+                    m_enemyProjectiles.emplace_back(spawnPos, velocity,
+                                                    ENEMY2_PROJ_COLOR, ENEMY2_PROJ_DAMAGE,
+                                                    ENEMY2_PROJ_TRAIL_SCALE);
+                }
+            }
         }
 
         // 3f. Contact engagement ownership + contact damage for both enemies
@@ -170,6 +216,9 @@ void Game::Update(float dt)
 
     // 3g. Respawn destroyed enemies after ENEMY_RESPAWN_DELAY seconds
     UpdateEnemyRespawns(dt);
+
+    // 3h. Enemy projectiles: move, trail, expire, and damage the player
+    UpdateEnemyProjectiles(dt);
 
     // Temporary debug damage (single press per hit, not per frame)
     if (IsKeyPressed(DEBUG_DAMAGE_KEY))
@@ -419,6 +468,12 @@ void Game::Draw()
     if (!m_testEnemy2.IsDestroyed())
     {
         m_testEnemy2.Draw();
+    }
+
+    // Enemy projectiles (world space — trails + heads)
+    for (const EnemyProjectile& proj : m_enemyProjectiles)
+    {
+        proj.Draw();
     }
 
     EndMode2D();
@@ -674,6 +729,34 @@ void Game::CheckBulletEnemyHits()
             }
         }
     }
+}
+
+void Game::UpdateEnemyProjectiles(float dt)
+{
+    for (EnemyProjectile& proj : m_enemyProjectiles)
+    {
+        proj.Update(dt, m_worldWidth, m_worldHeight);
+    }
+
+    // Player collision — skipped while dead; damage flows through the
+    // existing TakeDamage path so invulnerability still applies.
+    if (!m_player.m_isDead)
+    {
+        for (EnemyProjectile& proj : m_enemyProjectiles)
+        {
+            if (!proj.IsExpired() &&
+                proj.Touches(m_player.m_position, SHIP_COLLISION_RADIUS))
+            {
+                proj.ApplyToPlayer(m_player); // projectile carries its own damage
+                proj.Destroy();
+            }
+        }
+    }
+
+    // Remove expired shots without invalidating iteration
+    m_enemyProjectiles.erase(std::remove_if(m_enemyProjectiles.begin(), m_enemyProjectiles.end(),
+        [](const EnemyProjectile& proj) { return proj.IsExpired(); }),
+        m_enemyProjectiles.end());
 }
 
 // ----------------------------------------------------------------------------

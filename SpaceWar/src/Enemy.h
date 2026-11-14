@@ -45,6 +45,11 @@ constexpr float ENEMY_SEPARATION_SOFT_DIST = 110.0f; // px — steering bias zon
 constexpr float ENEMY_SEPARATION_STEER = 1.5f;       // repulsion bias strength
 constexpr float ENEMY_SEPARATION_RESOLVE_SPEED = 300.0f; // px/s — smooth gap correction cap
 
+// Ranged attack: moderately fast plasma orbs, one at a time, rapid fire.
+constexpr float ENEMY_FIRE_INTERVAL = 0.8f;    // seconds between shots
+constexpr float ENEMY_PROJ_SPEED   = 640.0f;  // px/s — must catch a fleeing player
+constexpr float ENEMY_PROJ_TRAIL_SCALE = 1.0f; // trail length identity (Type 1)
+
 class Enemy
 {
     // Grant Game access to position for mutual enemy separation (same
@@ -58,6 +63,8 @@ private:
     bool    m_isChasing;     // true once the enemy has entered the camera view
     float   m_health;        // HP — enemy is destroyed at 0
     bool    m_cornerHolding; // true while holding station inside the corner distance band
+    float   m_fireTimer;     // seconds until the next shot is ready
+    bool    m_shotRequested; // one-frame flag: Game spawns a projectile when set
 
     // Picks a new random destination inside the given bounds
     void PickNewDestination(float minX, float minY, float maxX, float maxY);

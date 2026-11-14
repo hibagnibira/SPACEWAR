@@ -50,6 +50,11 @@ constexpr float ENEMY2_SEPARATION_SOFT_DIST = 110.0f;
 constexpr float ENEMY2_SEPARATION_STEER = 1.5f;
 constexpr float ENEMY2_SEPARATION_RESOLVE_SPEED = 300.0f;
 
+// Ranged attack: very fast plasma orbs, one at a time, rapid fire.
+constexpr float ENEMY2_FIRE_INTERVAL = 0.55f;   // seconds between shots
+constexpr float ENEMY2_PROJ_SPEED   = 800.0f; // px/s — noticeably faster than Type 1
+constexpr float ENEMY2_PROJ_TRAIL_SCALE = 1.3f; // longer trail stays visible at speed
+
 class EnemyInterceptor
 {
     // Grant Game access to position for mutual enemy separation (no getters).
@@ -63,6 +68,8 @@ private:
     bool    m_isChasing;
     float   m_health;        // HP — enemy is destroyed at 0
     bool    m_cornerHolding; // true while holding station inside the corner distance band
+    float   m_fireTimer;     // seconds until the next shot is ready
+    bool    m_shotRequested; // one-frame flag: Game spawns a projectile when set
 
     void PickNewDestination(float minX, float minY, float maxX, float maxY);
 

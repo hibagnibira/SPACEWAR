@@ -43,6 +43,7 @@
 #include "Bullet.h"
 #include "HealingStone.h"
 #include "EnemyInterceptor.h"
+#include "EnemyProjectile.h"
 
 enum class GameState
 {
@@ -79,6 +80,7 @@ private:
     };
     std::vector<Star> m_stars;
     std::vector<Bullet> m_bullets; // Active player projectiles
+    std::vector<EnemyProjectile> m_enemyProjectiles; // Active enemy shots
     std::vector<HealingStone> m_healingStones; // Active healing pickups
     float m_stoneSpawnTimer;                   // Countdown to next spawn attempt
     Enemy m_testEnemy; // Milestone 1: single test enemy (rear chaser)
@@ -105,6 +107,7 @@ private:
     // Projectile management
     void SpawnPlayerBullet();
     void UpdateBullets(float dt);
+    void UpdateEnemyProjectiles(float dt);
 
     // Healing stone management
     void UpdateHealingStones(float dt);

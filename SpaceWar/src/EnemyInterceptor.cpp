@@ -13,6 +13,8 @@ EnemyInterceptor::EnemyInterceptor(Vector2 spawnPos, float size)
     , m_isChasing(false)
     , m_health(ENEMY2_MAX_HEALTH)
     , m_cornerHolding(false)
+    , m_fireTimer(ENEMY2_FIRE_INTERVAL)
+    , m_shotRequested(false)
 {
 }
 
@@ -63,6 +65,23 @@ void EnemyInterceptor::Update(float dt, Vector2 playerPos, Vector2 playerFacing,
         if (inView)
         {
             m_isChasing = true;
+        }
+    }
+
+    // --- Firing cooldown: only while chasing a live player. Game reads
+    // m_shotRequested (friendship) and spawns the actual projectile. ---
+    if (m_isChasing && !playerDead)
+    {
+        m_fireTimer -= dt;
+        if (m_fireTimer <= 0.0f)
+        {
+            const float fdx = playerPos.x - position.x;
+            const float fdy = playerPos.y - position.y;
+            if (std::hypot(fdx, fdy) > 1.0f)
+            {
+                m_shotRequested = true;
+            }
+            m_fireTimer = ENEMY2_FIRE_INTERVAL;
         }
     }
 
